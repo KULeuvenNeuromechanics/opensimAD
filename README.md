@@ -14,7 +14,7 @@ This workflow is not limited to full body models. [Any OpenSim model](https://us
     - CMake (make sure cmake.exe is in your path)
     - Visual studio (tested with Visual Studio 2015, 2017, 2019, 2022 Community editions)
     - MATLAB
-    - CasADi
+    - [CasADi](https://web.casadi.org/get/)
 
 ### Example
   - Make sure CasADi is in your MATLAB path. Use `addpath(genpath(casadi_path))` with casadi_path the path to the top folder of your CasADi download.

@@ -31,9 +31,6 @@ function [] = VerifyInverseDynamics(pathOpenSimModel, outputDir, outputFilename,
 %
 % Original author: Lars D'Hondt (based on code by Antoine Falisse)
 % Original date: 8/May/2023
-%
-% Last edit by: 
-% Last edit date: 
 % --------------------------------------------------------------------------
 
 
@@ -54,21 +51,17 @@ all_coordi = IO.coordi;
 joint_isTra = IO.jointi.translations;
 nCoordinates = length(coordinatesOrder);
 
-% Run ID with the .osim file and verify that we can get the same torques as with the external function.
-model = Model(pathOpenSimModel);
-model.initSystem();
-coordinateSet = model.getCoordinateSet();
-
-% Extract torques from external function.
-F = external('F', replace(fullfile(outputDir, [outputFilename, '.dll']),'\','/'));
+% create state values
 vec1 = zeros(IO.input.nInputs, 1);
 vec1(1:2:2*nCoordinates) = 0.05;
 if isfield(IO.input.Qs, 'pelvis_ty')
     vec1(IO.input.Qs.pelvis_ty) = -0.05;
 end
 
-ID_F = full(F(vec1));
-ID_F = ID_F(1:nCoordinates);
+%% Run ID with the .osim file 
+model = Model(pathOpenSimModel);
+model.initSystem();
+coordinateSet = model.getCoordinateSet();
 
 % Generate .mot file with same position inputs
 mot_file = ['Verify_', outputFilename, '.mot'];
@@ -120,16 +113,55 @@ for count = 1:numel(coordinatesOrder)
 
 end
 
-% Assert we get the same torques.
-test_diff = max(abs(ID_osim - ID_F)) < 1e-6;
-if test_diff
-    disp(['Inverse dynamics from "' outputFilename, '.dll" matches IDTool for "' osimFileName '.osim".'])
-    delete(fullfile(outputDir, 'ID_withOsimAndIDTool.sto'));
-    delete(path_mot);
-    delete(pathSetupID);
-else
-    warning(['Inverse dynamics from "' outputFilename, '.dll" does not match IDTool for "' osimFileName '.osim".']);
+%% Compare torques from external function.
+dllPath = replace(fullfile(outputDir, [outputFilename, '.dll']),'\','/');
+if isfile(dllPath)
+    F = external('F', dllPath);
+    ID_F = full(F(vec1));
+    ID_F = ID_F(1:nCoordinates);
+    
+    % Assert we get the same torques.
+    test_diff = max(abs(ID_osim - ID_F)) < 1e-6;
+    if test_diff
+        disp(['Inverse dynamics from "', outputFilename,...
+            '.dll" matches IDTool for "', osimFileName, '.osim".'])
+    else
+        warning(['Inverse dynamics from "', outputFilename,...
+            '.dll" does not match IDTool for "', osimFileName, '.osim".']);
+    end
+ 
 end
 
+%% Compare torques from external function.
+funPath = replace(fullfile(outputDir, [outputFilename, '.casadi']),'\','/');
+if isfile(funPath)
+    try
+        cd(outputDir);
+        F = casadi.Function.load(funPath);
+    catch cas_e
+        warning(['Tried to load "',funPath,...
+            '" with CasADi libraries located in "',GlobalOptions.getCasadiPath(),'".']);
+        rethrow(cas_e)
+    end
+    ID_F = full(F(vec1));
+    ID_F = ID_F(1:nCoordinates);
+    
+    % Assert we get the same torques.
+    test_diff = max(abs(ID_osim - ID_F)) < 1e-6;
+    if test_diff
+        disp(['Inverse dynamics from "', outputFilename,...
+            '.casadi" matches IDTool for "', osimFileName '.osim".'])
+        
+    else
+        warning(['Inverse dynamics from "', outputFilename,...
+            '.casadi" does not match IDTool for "', osimFileName '.osim".']);
+    end
+
+end
+
+%% Clean-up
+delete(fullfile(outputDir, 'ID_withOsimAndIDTool.sto'));
+delete(path_mot);
+delete(pathSetupID);
 
 end

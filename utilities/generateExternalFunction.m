@@ -2,7 +2,8 @@ function [] = generateExternalFunction(pathOpenSimModel, outputDir,...
     jointsOrder, coordinatesOrder, input3DBodyForces, input3DBodyMoments,...
     export3DPositions, export3DVelocities,...
     exportGRFs, exportGRMs, exportSeparateGRFs, exportContactPowers,...
-    outputFilename, compiler, verbose_mode, verify_ID, secondOrderDerivatives)
+    outputFilename, compiler, verboseMode, verify_ID,...
+    secondOrderDerivatives, noDll)
 % --------------------------------------------------------------------------
 % generateExternalFunction
 %   This function uses OpenSimAD to generate a CasADi external function. 
@@ -14,15 +15,32 @@ function [] = generateExternalFunction(pathOpenSimModel, outputDir,...
 %   containing the function F and its Jacobian in a format understandable 
 %   by CasADi. This code is finally compiled as a .dll that can be imported 
 %   when formulating trajectory optimization problems with CasADi.
+%   The expression graph is also serialised and saved to a file (.casadi),
+%   which can be loaded as a CasADi Function in MATLAB/python directly. 
+%   The serialised file is not compatible with older versions of CasADi,
+%   while the external function is.
 %
 %   The function F takes as:
 %       - INPUTS: 
 %           - joint positions and velocities (intertwined)
 %           - joint accelerations
-%           - (optional) forces and moments acting on bodies
+%           - (optional) forces acting on bodies (OpenSim StationForce)
+%           - (optional) torques acting on bodies (OpenSim BodyTorque)
 %       - OUTPUTS:
-%           - joint torques
-%           - (optional) other variables exported from the model 
+%           - joint torques (inverse dynamics)
+%           - (optional) position of a point (OpenSim pointkinematics)
+%           - (optional) velocity of a point (OpenSim pointkinematics)
+%           - (optional) total ground reaction forces of left and right side.
+%           Contact elements are identified as left or right based on their 
+%           name having a prefix (r_, R_, l_, L_) or suffix (_r, _R, _l, _L).
+%           - (optional) ground reaction moments of left and right side
+%           - (optional) ground reaction forces of each contact element
+%           - (optional) power due to deformation of each contact element.
+%           This includes only the power of the force normal to the ground 
+%           plane (visco-elastic), not of the in-plane components (friction).
+%           
+%   The optional inputs and outputs of F are configured via the arguments
+%   below:
 %
 %
 % INPUT:
@@ -102,7 +120,7 @@ function [] = generateExternalFunction(pathOpenSimModel, outputDir,...
 %       Visual studio 2017: 'Visual Studio 16 2019'
 %       Visual studio 2017: 'Visual Studio 17 2022'
 %
-%   - verbose_mode -
+%   - verboseMode -
 %   * outputs from windows command prompt are printed to matlab command 
 %   window if true. [bool]
 %
@@ -116,6 +134,9 @@ function [] = generateExternalFunction(pathOpenSimModel, outputDir,...
 %   graphs for evaluating second derivative information are also added. Do 
 %   note that this greatly increases the compiling time, especially for models
 %   with many degrees of freedom. [bool]
+%
+%   - noDll -
+%   * if true, no .dll (or .lib) files are generated. [bool]
 %
 % OUTPUT:
 %   This function does not return outputs, but generates files. Assuming 
@@ -142,6 +163,12 @@ function [] = generateExternalFunction(pathOpenSimModel, outputDir,...
 %       positions: IO.coordi.(name)*2-1
 %       velocities: IO.coordi.(name)*2
 %       acceleration: IO.coordi.(name) * IO.nCoordinates*2
+%
+%   - filename.casadi -
+%   * serialised CasADi Function. Can be loaded into MATLAB via 
+%       F = Function.load('filename.casadi');
+%   Note that not every version of CasADi can load this Function. 
+%   v3.6.3 is confirmed to work, v3.5.5 is confirmed to not work
 % 
 %
 % Note: 
@@ -158,32 +185,37 @@ function [] = generateExternalFunction(pathOpenSimModel, outputDir,...
 %
 % Original author: Lars D'Hondt (based on code by Antoine Falisse)
 % Original date: 8/May/2023
-%
-% Last edit by: 
-% Last edit date: 
 % --------------------------------------------------------------------------
 
-%% write the cpp file.
+%% Write the cpp file.
 writeCppFile(pathOpenSimModel, outputDir, outputFilename,...
     jointsOrder, coordinatesOrder, input3DBodyForces, input3DBodyMoments,...
     export3DPositions, export3DVelocities,...
     exportGRFs, exportGRMs, exportSeparateGRFs, exportContactPowers);
 
-%% build expression graph (foo.py)
-[fooPath] = buildExpressionGraph(outputFilename, outputDir, compiler, verbose_mode);
+%% Build expression graph (foo.py)
+[fooPath] = buildExpressionGraph(outputFilename, outputDir, compiler, verboseMode);
 
-%% generate code with expression graph and derivative information (foo_jac.c)
+%% Generate code with expression graph and derivative information (foo_jac.c)
 load(fullfile(outputDir, [outputFilename, '_IO.mat']),'IO');
 generateF(IO.input.nInputs, fooPath, secondOrderDerivatives);
 
+%% Copy serialised casadi Function
+copyfile(fullfile(fooPath,'F_foo.casadi'), fullfile(outputDir,[outputFilename,'.casadi']));
+
 %% Build external Function (.dll file).
-buildExternalFunction(fooPath, outputFilename, outputDir, compiler, verbose_mode);
+if ~noDll
+    buildExternalFunction(fooPath, outputFilename, outputDir, compiler, verboseMode);
+end
 
 %% Verification
 % Run ID with the .osim file and verify that we can get the same torques as
 % with the external function.
 if verify_ID
-    VerifyInverseDynamics(pathOpenSimModel, outputDir, outputFilename, verbose_mode);
+    VerifyInverseDynamics(pathOpenSimModel, outputDir, outputFilename, verboseMode);
 end
+
+%% Clean-up
+removeAllTempFiles(outputFilename);
 
 end

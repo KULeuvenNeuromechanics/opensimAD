@@ -18,6 +18,8 @@
 %         - joint torques
 %         - (optional) other variables exported from the model
 %
+%   See "help generateExternalFunction" for more info
+%
 % Reference: 
 %   Falisse A, Serrancolí G, et al. (2019) Algorithmic differentiation 
 %   improves the computational efficiency of OpenSim-based trajectory 
@@ -26,9 +28,6 @@
 %
 % Original author: Lars D'Hondt (based on code by Antoine Falisse)
 % Original date: 8/May/2023
-%
-% Last edit by: 
-% Last edit date: 
 % --------------------------------------------------------------------------
 
 clear
@@ -48,13 +47,13 @@ pathOpenSimModel = fullfile(pathMain, 'examples', 'Hamner_modified.osim');
 outputDir = fullfile(pathMain, 'examples');
 
 % Output file name
-outputFilename = 'F_Hamner';
+outputFilename = 'F_test';
 
 % Compiler
 compiler = 'Visual Studio 17 2022';
 
 % Print information to the command window
-verbose_mode = true;
+verbose_mode = false;
 
 % Verify the generated function
 verify_ID = true;
@@ -123,9 +122,14 @@ exportContactPowers = true;
 % graphs for evaluating second derivative information are also added.
 secondOrderDerivatives = false;
 
+% Do not create an external function (.dll and .lib)
+% If you only want to use the serialised function (.casadi), this option cn
+% save some time.
+noDll = false;
+
 %% Call generateExternalFunction function
 generateExternalFunction(pathOpenSimModel, outputDir, jointsOrder,...
     coordinatesOrder, input3DBodyForces, input3DBodyMoments,...
     export3DPositions, export3DVelocities, exportGRFs,...
     exportGRMs, exportSeparateGRFs, exportContactPowers, outputFilename, compiler,...
-    verbose_mode, verify_ID, secondOrderDerivatives);
+    verbose_mode, verify_ID, secondOrderDerivatives, noDll);

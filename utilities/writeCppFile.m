@@ -98,10 +98,7 @@ function [] = writeCppFile(pathOpenSimModel, outputDir, outputFilename,...
 %   - (This function does not return outputs) -
 % 
 % Original author: Lars D'Hondt (based on code by Antoine Falisse)
-% Original date: 8/May/2023
-%
-% Last edit by: 
-% Last edit date: 
+% Original date: 8/May/2023 
 % --------------------------------------------------------------------------
 
 % Paths.
