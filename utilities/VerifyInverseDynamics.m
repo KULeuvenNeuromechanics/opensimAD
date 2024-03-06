@@ -139,9 +139,9 @@ if isfile(funPath)
         cd(outputDir);
         F = casadi.Function.load(funPath);
     catch cas_e
-        warning(['Tried to load "',funPath,...
+        warning(['Unable to load "',funPath,...
             '" with CasADi libraries located in "',GlobalOptions.getCasadiPath(),'".']);
-        rethrow(cas_e)
+%         rethrow(cas_e)
     end
     ID_F = full(F(vec1));
     ID_F = ID_F(1:nCoordinates);

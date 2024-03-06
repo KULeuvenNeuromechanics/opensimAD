@@ -201,7 +201,9 @@ load(fullfile(outputDir, [outputFilename, '_IO.mat']),'IO');
 generateF(IO.input.nInputs, fooPath, secondOrderDerivatives);
 
 %% Copy serialised casadi Function
-copyfile(fullfile(fooPath,'F_foo.casadi'), fullfile(outputDir,[outputFilename,'.casadi']));
+if exist(fullfile(fooPath,'F_foo.casadi'),'file')
+    copyfile(fullfile(fooPath,'F_foo.casadi'), fullfile(outputDir,[outputFilename,'.casadi']));
+end
 
 %% Build external Function (.dll file).
 if ~noDll
