@@ -98,6 +98,11 @@ export3DVelocities(1).body = 'tibia_l';
 export3DVelocities(1).point_in_body = [0, -0.012, 0];
 export3DVelocities(1).name = 'left_shin';
 
+export3DVelocitiesProjGround = [];
+export3DVelocitiesProjGround(1).body = 'tibia_l';
+export3DVelocitiesProjGround(1).point_in_body = [0, -0.012, 0];
+export3DVelocitiesProjGround(1).name = 'left_shin';
+
 % Export total GRFs.
 % If true, right and left 3D GRFs (in this order) are exported.
 exportGRFs = true;
@@ -130,6 +135,6 @@ noDll = false;
 %% Call generateExternalFunction function
 generateExternalFunction(pathOpenSimModel, outputDir, jointsOrder,...
     coordinatesOrder, input3DBodyForces, input3DBodyMoments,...
-    export3DPositions, export3DVelocities, exportGRFs,...
+    export3DPositions, export3DVelocities, export3DVelocitiesProjGround, exportGRFs,...
     exportGRMs, exportSeparateGRFs, exportContactPowers, outputFilename, compiler,...
     verbose_mode, verify_ID, secondOrderDerivatives, noDll);
