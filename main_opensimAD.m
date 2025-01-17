@@ -94,6 +94,11 @@ export3DPositions(2).body = 'tibia_r';
 export3DPositions(2).point_in_body = [0, -0.012, 0];
 export3DPositions(2).name = 'right_shin';
 
+export3DOrientations = [];
+export3DOrientations(1).body = 'calcn_r';
+export3DOrientations(1).reference_frame = 'tibia_r';
+export3DOrientations(1).name = 'ankle_quat';
+
 export3DVelocities = [];
 export3DVelocities(1).body = 'tibia_l';
 export3DVelocities(1).point_in_body = [0, -0.012, 0];
@@ -126,6 +131,6 @@ secondOrderDerivatives = false;
 %% Call generateExternalFunction function
 generateExternalFunction(pathOpenSimModel, outputDir, jointsOrder,...
     coordinatesOrder, input3DBodyForces, input3DBodyMoments,...
-    export3DPositions, export3DVelocities, exportGRFs,...
+    export3DPositions, export3DOrientations, export3DVelocities, exportGRFs,...
     exportGRMs, exportSeparateGRFs, exportContactPowers, outputFilename, compiler,...
     verbose_mode, verify_ID, secondOrderDerivatives);

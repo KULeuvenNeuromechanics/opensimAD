@@ -1,6 +1,6 @@
 function [] = writeCppFile(pathOpenSimModel, outputDir, outputFilename,...
     jointsOrder, coordinatesOrder, input3DBodyForces, input3DBodyMoments,...
-    export3DPositions, export3DVelocities,...
+    export3DPositions, export3DOrientations, export3DVelocities,...
     exportGRFs, exportGRMs, exportSeparateGRFs, exportContactPowers)
 % --------------------------------------------------------------------------
 % writeCppFile
@@ -68,6 +68,13 @@ function [] = writeCppFile(pathOpenSimModel, outputDir, outputFilename,...
 %       export3DPositions(2).body = 'tibia_r';
 %       export3DPositions(2).point_in_body = [0, -0.012, 0];
 %       export3DPositions(2).name = 'right_shin';
+%
+%   - export3DOrientations
+%   * Export the relative roation between 2 bodies as a quaternion 
+%   [array of structs] Example input:
+%       export3DOrientations(1).body = 'calcn_r';
+%       export3DOrientations(1).reference_frame = 'tibia_r';
+%       export3DOrientations(1).name = 'ankle_quat';
 %
 %   - export3DVelocities
 %   * points of which the velocity in ground frame should be exported. 
@@ -195,6 +202,9 @@ if exportGRMs
 end
 if ~isempty(export3DPositions)
     nOutputs = nOutputs + 3*length(export3DPositions);
+end
+if ~isempty(export3DOrientations)
+    nOutputs = nOutputs + 4*length(export3DOrientations);
 end
 if ~isempty(export3DVelocities)
     nOutputs = nOutputs + 3*length(export3DVelocities);
@@ -729,6 +739,16 @@ if ~isempty(export3DPositions)
     fprintf(fid, '\n');
 end
 
+% orientations
+if ~isempty(export3DOrientations)
+    fprintf(fid, '\t/// Orientations.\n');
+    for i = 1:length(export3DOrientations)
+        fprintf(fid, '\tQuaternion %s_orientation = %s->getMobilizedBody().findBodyRotationInAnotherBody(*state, %s->getMobilizedBody()).convertRotationToQuaternion();\n',...
+            export3DOrientations(i).name, export3DOrientations(i).body, export3DOrientations(i).reference_frame);
+    end
+    fprintf(fid, '\n');
+end
+
 % velocities
 if ~isempty(export3DVelocities)
     fprintf(fid, '\t/// Station velocities.\n');
@@ -867,6 +887,20 @@ if ~isempty(export3DPositions)
     end
     count_acc = count_acc + 3 * length(export3DPositions);
     IO_indices.position = IO_point_pos;
+end
+
+% orientations
+if ~isempty(export3DOrientations)
+    IO_orientation = struct();
+    for c_seg = 1:length(export3DOrientations)
+        name = export3DOrientations(c_seg).name;
+        fprintf(fid, '\tfor (int i = 0; i < 4; ++i) res[0][i + nCoordinates + %i] = value<T>(%s_orientation.get(i));\n', count_acc + (c_seg-1) * 3, name);
+        tmp = outputCount + count_acc + (c_seg - 1) * 4;
+        segment_i = tmp : tmp + 3;
+        IO_orientation.(name) = segment_i;
+    end
+    count_acc = count_acc + 4 * length(export3DOrientations);
+    IO_indices.orientation = IO_orientation;
 end
 
 % velocities
