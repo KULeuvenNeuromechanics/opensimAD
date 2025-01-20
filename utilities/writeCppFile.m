@@ -894,7 +894,7 @@ if ~isempty(export3DOrientations)
     IO_orientation = struct();
     for c_seg = 1:length(export3DOrientations)
         name = export3DOrientations(c_seg).name;
-        fprintf(fid, '\tfor (int i = 0; i < 4; ++i) res[0][i + nCoordinates + %i] = value<T>(%s_orientation.get(i));\n', count_acc + (c_seg-1) * 3, name);
+        fprintf(fid, '\tfor (int i = 0; i < 4; ++i) res[0][i + nCoordinates + %i] = value<T>(%s_orientation.get(i));\n', count_acc + (c_seg-1) * 4, name);
         tmp = outputCount + count_acc + (c_seg - 1) * 4;
         segment_i = tmp : tmp + 3;
         IO_orientation.(name) = segment_i;
