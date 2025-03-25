@@ -379,6 +379,7 @@ for i = 0:jointSet.getSize()-1
                     c_joint.getName(), coord, dofSel_f_slope, dofSel_f_intercept);
             
             elseif strcmp(char(dofSel_f.getConcreteClassName()), 'PolynomialFunction')
+                c_coord_name = char(dofSel.get_coordinates(0));
                 fprintf(fid, '\tst_%s[%i].setCoordinateNames(OpenSim::Array<std::string>(\"%s\", 1, 1));\n', c_joint.getName(), coord, c_coord_name);
                 dofSel_f_obj = PolynomialFunction.safeDownCast(dofSel_f);
                 dofSel_f_coeffs = dofSel_f_obj.getCoefficients().getAsMat();
@@ -410,6 +411,7 @@ for i = 0:jointSet.getSize()-1
                     dofSel_f_obj_f_obj_value = dofSel_f_obj_f_obj.getValue();
                     fprintf(fid, '\tst_%s[%i].setFunction(new MultiplierFunction(new Constant(%.20f), %.20f));\n', c_joint.getName(), coord, dofSel_f_obj_f_obj_value, dofSel_f_obj_scale);
                 elseif strcmp(dofSel_f_obj_f_name, 'PolynomialFunction')
+                    c_coord_name = char(dofSel.get_coordinates(0));
                     fprintf(fid, '\tst_%s[%i].setCoordinateNames(OpenSim::Array<std::string>("%s", 1, 1));\n', c_joint.getName(), coord, c_coord_name);
                     dofSel_f_obj_f_obj = PolynomialFunction.safeDownCast(dofSel_f_obj_f);
                     dofSel_f_obj_f_coeffs = dofSel_f_obj_f_obj.getCoefficients().getAsMat();
