@@ -1,6 +1,7 @@
 function [] = writeCppFile(pathOpenSimModel, outputDir, outputFilename,...
     jointsOrder, coordinatesOrder, input3DBodyForces, input3DBodyMoments,...
-    export3DPositions, export3DOrientations, export3DVelocities,...
+    export3DPositions, export3DOrientations,...
+    export3DVelocities, export3DVelocitiesProjGround,...
     exportGRFs, exportGRMs, exportSeparateGRFs, exportContactPowers)
 % --------------------------------------------------------------------------
 % writeCppFile
@@ -105,10 +106,7 @@ function [] = writeCppFile(pathOpenSimModel, outputDir, outputFilename,...
 %   - (This function does not return outputs) -
 % 
 % Original author: Lars D'Hondt (based on code by Antoine Falisse)
-% Original date: 8/May/2023
-%
-% Last edit by: 
-% Last edit date: 
+% Original date: 8/May/2023 
 % --------------------------------------------------------------------------
 
 % Paths.
@@ -209,7 +207,9 @@ end
 if ~isempty(export3DVelocities)
     nOutputs = nOutputs + 3*length(export3DVelocities);
 end
-
+if ~isempty(export3DVelocitiesProjGround)
+    nOutputs = nOutputs + 3*length(export3DVelocitiesProjGround);
+end
 
 
 %% Include headers and generic helper function
@@ -763,6 +763,21 @@ if ~isempty(export3DVelocities)
     fprintf(fid, '\n');
 end
 
+% velocities of point projected on ground
+if ~isempty(export3DVelocitiesProjGround)
+    fprintf(fid, '\t/// Station velocities projected on ground.\n');
+    for i = 1:length(export3DVelocitiesProjGround)
+        segment = export3DVelocitiesProjGround(i).body;
+        station = export3DVelocitiesProjGround(i).point_in_body;
+        name = export3DVelocitiesProjGround(i).name;
+        fprintf(fid, '\tVec3 %s_posInGround4VelProj = %s->findStationLocationInGround(*state, Vec3(%.20f, %.20f, %.20f));\n', name, segment, station(1), station(2), station(3));
+        fprintf(fid, '\t%s_posInGround4VelProj[1] = 0;\n', name);
+        fprintf(fid, '\tVec3 %s_posInBody4VelProj = model->getGround().findStationLocationInAnotherFrame(*state, %s_posInGround4VelProj, *%s);\n', name, name, segment);
+        fprintf(fid, '\tVec3 %s_velProjOnGround = %s->findStationVelocityInGround(*state, %s_posInBody4VelProj);\n', name, segment, name);
+    end
+    fprintf(fid, '\n');
+end
+
 % ground reaction forces
 if exportGRFs
     fprintf(fid, '\t/// Ground reaction forces.\n');
@@ -917,6 +932,20 @@ if ~isempty(export3DVelocities)
     end
     count_acc = count_acc + 3 * length(export3DVelocities);
     IO_indices.velocity = IO_point_vel;
+end
+
+% velocities projected on ground
+if ~isempty(export3DVelocitiesProjGround)
+    IO_point_projvel = struct();
+    for c_seg = 1:length(export3DVelocitiesProjGround)
+        name = export3DVelocitiesProjGround(c_seg).name;
+        fprintf(fid, '\tfor (int i = 0; i < 3; ++i) res[0][i + nCoordinates + %i] = value<T>(%s_velProjOnGround[i]);\n', count_acc + (c_seg-1) * 3, name);
+        tmp = outputCount + count_acc + (c_seg - 1) * 3;
+        segment_i = tmp : tmp + 2;
+        IO_point_projvel.(name) = segment_i;
+    end
+    count_acc = count_acc + 3 * length(export3DVelocitiesProjGround);
+    IO_indices.velocityProj = IO_point_projvel;
 end
 
 % ground reaction forces

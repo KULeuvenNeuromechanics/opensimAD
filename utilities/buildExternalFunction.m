@@ -38,9 +38,6 @@ function [] = buildExternalFunction(fooPath, outputFilename, outputDir, compiler
 %
 % Original author: Lars D'Hondt (based on code by Antoine Falisse)
 % Original date: 8/May/2023
-%
-% Last edit by: 
-% Last edit date: 
 % --------------------------------------------------------------------------
 
 %% set paths
@@ -77,9 +74,5 @@ cd(pathMain);
 copyfile(fullfile(path_external_functions_filename_install, 'bin', [outputFilename '.dll']), outputDir);
 copyfile(fullfile(path_external_functions_filename_install, 'lib', [outputFilename '.lib']), outputDir);
 
-%% remove directories with temporary files
-rmdir(path_expression_graph_filename_build, 's');
-rmdir(path_external_functions_filename_install, 's');
-rmdir(path_external_functions_filename_build, 's');
 
 end
