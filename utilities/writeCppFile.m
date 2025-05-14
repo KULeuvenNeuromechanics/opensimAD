@@ -1,6 +1,7 @@
 function [] = writeCppFile(pathOpenSimModel, outputDir, outputFilename,...
     jointsOrder, coordinatesOrder, input3DBodyForces, input3DBodyMoments,...
-    export3DPositions, export3DVelocities,...
+    export3DPositions, export3DOrientations,...
+    export3DVelocities, export3DVelocitiesProjGround,...
     exportGRFs, exportGRMs, exportSeparateGRFs, exportContactPowers)
 % --------------------------------------------------------------------------
 % writeCppFile
@@ -69,6 +70,13 @@ function [] = writeCppFile(pathOpenSimModel, outputDir, outputFilename,...
 %       export3DPositions(2).point_in_body = [0, -0.012, 0];
 %       export3DPositions(2).name = 'right_shin';
 %
+%   - export3DOrientations
+%   * Export the relative roation between 2 bodies as a quaternion 
+%   [array of structs] Example input:
+%       export3DOrientations(1).body = 'calcn_r';
+%       export3DOrientations(1).reference_frame = 'tibia_r';
+%       export3DOrientations(1).name = 'ankle_quat';
+%
 %   - export3DVelocities
 %   * points of which the velocity in ground frame should be exported. 
 %   [array of structs] Example input:
@@ -98,10 +106,7 @@ function [] = writeCppFile(pathOpenSimModel, outputDir, outputFilename,...
 %   - (This function does not return outputs) -
 % 
 % Original author: Lars D'Hondt (based on code by Antoine Falisse)
-% Original date: 8/May/2023
-%
-% Last edit by: 
-% Last edit date: 
+% Original date: 8/May/2023 
 % --------------------------------------------------------------------------
 
 % Paths.
@@ -131,7 +136,7 @@ if isempty(jointsOrder) || isempty(coordinatesOrder)
     for i = 0:nJoints-1
         joint_i = jointSet.get(i);
         joint_name_i = char(joint_i.getName());
-        if ~contains(joint_name_i, 'patel')
+        if ~contains(joint_name_i, 'patel') % do not add patella joint to jointsOrder
             jointsOrder{end+1} = joint_name_i;
             joint_i_Nc = joint_i.numCoordinates();
             for j = 0:joint_i_Nc-1
@@ -180,9 +185,9 @@ if ~isempty(input3DBodyMoments)
 end
 
 % Total number of outputs for the external function
-nOutputs = nCoordinates;
+nOutputs = nCoordinates; % ID moment/force per coordinate
 if exportGRFs
-    nOutputs = nOutputs + 6;
+    nOutputs = nOutputs + 6; % 3 right and 3 left
 end
 if exportSeparateGRFs
     nOutputs = nOutputs + 3*nContacts;
@@ -191,15 +196,20 @@ if exportContactPowers
     nOutputs = nOutputs + nContacts;
 end
 if exportGRMs
-    nOutputs = nOutputs + 6;
+    nOutputs = nOutputs + 6; % 3 right and 3 left
 end
 if ~isempty(export3DPositions)
     nOutputs = nOutputs + 3*length(export3DPositions);
 end
+if ~isempty(export3DOrientations)
+    nOutputs = nOutputs + 4*length(export3DOrientations);
+end
 if ~isempty(export3DVelocities)
     nOutputs = nOutputs + 3*length(export3DVelocities);
 end
-
+if ~isempty(export3DVelocitiesProjGround)
+    nOutputs = nOutputs + 3*length(export3DVelocitiesProjGround);
+end
 
 
 %% Include headers and generic helper function
@@ -231,7 +241,7 @@ fprintf(fid, '#include <fstream>\n\n');
 fprintf(fid, 'using namespace SimTK;\n');
 fprintf(fid, 'using namespace OpenSim;\n\n');
 
-fprintf(fid, 'constexpr int n_in = 2; \n');
+fprintf(fid, 'constexpr int n_in = 2; \n'); % states and controls vectors
 fprintf(fid, 'constexpr int n_out = 1; \n');
 fprintf(fid, 'constexpr int nCoordinates = %i; \n',nCoordinates);
 fprintf(fid, 'constexpr int NX = nCoordinates*2; \n');
@@ -369,6 +379,7 @@ for i = 0:jointSet.getSize()-1
                     c_joint.getName(), coord, dofSel_f_slope, dofSel_f_intercept);
             
             elseif strcmp(char(dofSel_f.getConcreteClassName()), 'PolynomialFunction')
+                c_coord_name = char(dofSel.get_coordinates(0));
                 fprintf(fid, '\tst_%s[%i].setCoordinateNames(OpenSim::Array<std::string>(\"%s\", 1, 1));\n', c_joint.getName(), coord, c_coord_name);
                 dofSel_f_obj = PolynomialFunction.safeDownCast(dofSel_f);
                 dofSel_f_coeffs = dofSel_f_obj.getCoefficients().getAsMat();
@@ -400,7 +411,8 @@ for i = 0:jointSet.getSize()-1
                     dofSel_f_obj_f_obj_value = dofSel_f_obj_f_obj.getValue();
                     fprintf(fid, '\tst_%s[%i].setFunction(new MultiplierFunction(new Constant(%.20f), %.20f));\n', c_joint.getName(), coord, dofSel_f_obj_f_obj_value, dofSel_f_obj_scale);
                 elseif strcmp(dofSel_f_obj_f_name, 'PolynomialFunction')
-                    fprintf(fid, '\tst_%s[%i].setCoordinateNames(OpenSim::Arraystd::string("%s", 1, 1));\n', c_joint.getName(), coord, c_coord_name);
+                    c_coord_name = char(dofSel.get_coordinates(0));
+                    fprintf(fid, '\tst_%s[%i].setCoordinateNames(OpenSim::Array<std::string>("%s", 1, 1));\n', c_joint.getName(), coord, c_coord_name);
                     dofSel_f_obj_f_obj = PolynomialFunction.safeDownCast(dofSel_f_obj_f);
                     dofSel_f_obj_f_coeffs = dofSel_f_obj_f_obj.getCoefficients().getAsMat();
                     c_nCoeffs = size(dofSel_f_obj_f_coeffs,1);
@@ -472,6 +484,7 @@ for i = 0:jointSet.getSize()-1
 end
 
 %% Add joints to model in pre-defined order
+% structs with indices. for later use
 jointi = [];
 all_coordi = [];
 joint_isRot = [];
@@ -485,7 +498,7 @@ if ~isempty(jointsOrder)
         coordi = [];
         
         try
-            c_joint = jointSet.get(jointOrder);
+            c_joint = jointSet.get(jointOrder); % will fail if joint from jointsOrder is not in jointSet (i.e. model file)
             c_joint_name = char(c_joint.getName());
             
             for j = 0:c_joint.numCoordinates()-1
@@ -728,6 +741,16 @@ if ~isempty(export3DPositions)
     fprintf(fid, '\n');
 end
 
+% orientations
+if ~isempty(export3DOrientations)
+    fprintf(fid, '\t/// Orientations.\n');
+    for i = 1:length(export3DOrientations)
+        fprintf(fid, '\tQuaternion %s_orientation = %s->getMobilizedBody().findBodyRotationInAnotherBody(*state, %s->getMobilizedBody()).convertRotationToQuaternion();\n',...
+            export3DOrientations(i).name, export3DOrientations(i).body, export3DOrientations(i).reference_frame);
+    end
+    fprintf(fid, '\n');
+end
+
 % velocities
 if ~isempty(export3DVelocities)
     fprintf(fid, '\t/// Station velocities.\n');
@@ -736,6 +759,21 @@ if ~isempty(export3DVelocities)
         station = export3DVelocities(i).point_in_body;
         name = export3DVelocities(i).name;
         fprintf(fid, '\tVec3 %s_velInGround = %s->findStationVelocityInGround(*state, Vec3(%.20f, %.20f, %.20f));\n', name, segment, station(1), station(2), station(3));
+    end
+    fprintf(fid, '\n');
+end
+
+% velocities of point projected on ground
+if ~isempty(export3DVelocitiesProjGround)
+    fprintf(fid, '\t/// Station velocities projected on ground.\n');
+    for i = 1:length(export3DVelocitiesProjGround)
+        segment = export3DVelocitiesProjGround(i).body;
+        station = export3DVelocitiesProjGround(i).point_in_body;
+        name = export3DVelocitiesProjGround(i).name;
+        fprintf(fid, '\tVec3 %s_posInGround4VelProj = %s->findStationLocationInGround(*state, Vec3(%.20f, %.20f, %.20f));\n', name, segment, station(1), station(2), station(3));
+        fprintf(fid, '\t%s_posInGround4VelProj[1] = 0;\n', name);
+        fprintf(fid, '\tVec3 %s_posInBody4VelProj = model->getGround().findStationLocationInAnotherFrame(*state, %s_posInGround4VelProj, *%s);\n', name, name, segment);
+        fprintf(fid, '\tVec3 %s_velProjOnGround = %s->findStationVelocityInGround(*state, %s_posInBody4VelProj);\n', name, segment, name);
     end
     fprintf(fid, '\n');
 end
@@ -868,6 +906,20 @@ if ~isempty(export3DPositions)
     IO_indices.position = IO_point_pos;
 end
 
+% orientations
+if ~isempty(export3DOrientations)
+    IO_orientation = struct();
+    for c_seg = 1:length(export3DOrientations)
+        name = export3DOrientations(c_seg).name;
+        fprintf(fid, '\tfor (int i = 0; i < 4; ++i) res[0][i + nCoordinates + %i] = value<T>(%s_orientation.get(i));\n', count_acc + (c_seg-1) * 4, name);
+        tmp = outputCount + count_acc + (c_seg - 1) * 4;
+        segment_i = tmp : tmp + 3;
+        IO_orientation.(name) = segment_i;
+    end
+    count_acc = count_acc + 4 * length(export3DOrientations);
+    IO_indices.orientation = IO_orientation;
+end
+
 % velocities
 if ~isempty(export3DVelocities)
     IO_point_vel = struct();
@@ -880,6 +932,20 @@ if ~isempty(export3DVelocities)
     end
     count_acc = count_acc + 3 * length(export3DVelocities);
     IO_indices.velocity = IO_point_vel;
+end
+
+% velocities projected on ground
+if ~isempty(export3DVelocitiesProjGround)
+    IO_point_projvel = struct();
+    for c_seg = 1:length(export3DVelocitiesProjGround)
+        name = export3DVelocitiesProjGround(c_seg).name;
+        fprintf(fid, '\tfor (int i = 0; i < 3; ++i) res[0][i + nCoordinates + %i] = value<T>(%s_velProjOnGround[i]);\n', count_acc + (c_seg-1) * 3, name);
+        tmp = outputCount + count_acc + (c_seg - 1) * 3;
+        segment_i = tmp : tmp + 2;
+        IO_point_projvel.(name) = segment_i;
+    end
+    count_acc = count_acc + 3 * length(export3DVelocitiesProjGround);
+    IO_indices.velocityProj = IO_point_projvel;
 end
 
 % ground reaction forces

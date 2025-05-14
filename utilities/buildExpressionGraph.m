@@ -36,10 +36,7 @@ function [pathFoo] = buildExpressionGraph(outputFilename,...
 %   https://doi.org/10.1371/journal.pone.0217730
 %
 % Original author: Lars D'Hondt (based on code by Antoine Falisse)
-% Original date: 8/May/2023
-%
-% Last edit by: 
-% Last edit date: 
+% Original date: 8/May/2023 
 % --------------------------------------------------------------------------
 
 %% set paths

@@ -1,13 +1,14 @@
-function [] = removeAllTempFiles()
+function [] = removeAllTempFiles(varargin)
 % --------------------------------------------------------------------------
 % removeAllTempFiles
-%   Removes all temporary files that arecreaten when running opensimAD.
+%   Removes all temporary files that are created when running opensimAD.
 %   These should be removed automatically if all goes well, but files can
 %   persist if an error occurred.
 %
 %
 % INPUT:
-%   -- (This function does not take input arguments) -
+%   - (optional) outputFilename -
+%   * remove only the temporary files from a specific build
 %
 %
 % OUTPUT:
@@ -15,34 +16,27 @@ function [] = removeAllTempFiles()
 %
 % Original author: Lars D'Hondt
 % Original date: 15/May/2023
-%
-% Last edit by: 
-% Last edit date: 
 % --------------------------------------------------------------------------
 
 [pathUtilities,~,~] = fileparts(mfilename('fullpath'));
 [pathMain,~,~] = fileparts(pathUtilities);
 
 
-dir1 = dir(fullfile(pathMain, 'buildExpressionGraph'));
-for i=1:length(dir1)
-    if ~strcmp(dir1(i).name,'.') && ~strcmp(dir1(i).name,'..') && dir1(i).isdir
-        rmdir(fullfile(dir1(i).folder,dir1(i).name), 's');
-    end
-end
+temp_dirs = ["buildExpressionGraph", "buildExternalFunction",...
+    "installExternalFunction"];
 
-dir1 = dir(fullfile(pathMain, 'buildExternalFunction/'));
-for i=1:length(dir1)
-    if ~strcmp(dir1(i).name,'.') && ~strcmp(dir1(i).name,'..') && dir1(i).isdir
-        rmdir(fullfile(dir1(i).folder,dir1(i).name), 's');
-    end
-end
+for temp_dir=temp_dirs
+    dir1 = dir(fullfile(pathMain, char(temp_dir)));
 
-dir1 = dir(fullfile(pathMain, 'installExternalFunction'));
-for i=1:length(dir1)
-    if ~strcmp(dir1(i).name,'.') && ~strcmp(dir1(i).name,'..') && dir1(i).isdir
-        rmdir(fullfile(dir1(i).folder,dir1(i).name), 's');
+    for i=1:length(dir1)
+        if ~strcmp(dir1(i).name,'.') && ~strcmp(dir1(i).name,'..') && dir1(i).isdir
+            if ~isempty(varargin) && ~strcmp(dir1(i).name, varargin{1})
+                continue
+            end
+            rmdir(fullfile(dir1(i).folder,dir1(i).name), 's');
+        end
     end
+
 end
 
 lockFile = fullfile(pathMain, 'OpenSimAD-install', 'bin', 'lockFile.txt');
