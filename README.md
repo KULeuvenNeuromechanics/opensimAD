@@ -32,6 +32,46 @@ This workflow is not limited to full body models. [Any OpenSim model](https://us
 - The code generates and runs .exe files, which can cause troubles with security policies. On KU Leuven GBW computers, run opensimAD from the C:/GBW_MyPrograms folder to prevent issues with group policy.
 - When getting an error message containing "opensim" or "simbody", check your [OpenSim installation](https://simtk-confluence.stanford.edu:8443/display/OpenSim/Scripting+with+Matlab) and path settings are correct.
 
+## opensimAD workflow
+
+
+matlab:
+
+1. Use api of regular opensim to read information from model file (\*.osim)
+2. Generate code (F_\*.cpp) that constructs and analyzes this model, but the generated code uses the opensimAD api.
+	Note: most arguments in the matlab functions are to configure the analysis that needs to be done.
+
+terminal (via matlab `system()`):
+
+3. Compile the generated code (F_\*.cpp) and link with opensimAD binaries to create (F_\*.exe). This uses cmake and visual studio compiler.
+4. Run F_\*.exe to generate a function that contains the expression graph (sequence of elementary operations) of the desired analysis (foo.py).
+
+python (GenF.py) or terminal (GenF.exe):
+
+5. Evaluate the expression graph (foo.py) with CasADi symbolic variables to get a symbolic expression.
+6. Create symbolic expressions of the partial derivatives of the input/output of the analysis.
+7. (newer versions) Serialise the symbolic expressions and save them to a file (F_foo.casadi, F_\*.casadi).
+8. Generate code (foo_jac.c) for the symbolic expressions of the analysis and the derivatives.
+
+terminal (via matlab `system()`):
+
+9. Compile foo_jac.c into a shared library (F_\*.dll). Functions in this library can be loaded into matlab via CasADi's `external()` function constructor.
+
+matlab:
+
+10. Use api of regular opensim to perform a dummy analysis for the model to get reference results.
+11. Load the analysis function from F_\*.dll (or F_\*.casadi) and evaluate it with the same dummy inputs to verify the created file.
+12. Remove all the temporary folders and files.
+
+
+Notes
+
+- The workflow is hard-coded to use cmake and visual studio compiler. Modifying this to use another compiler (maybe without cmake) is totally fine.
+- Steps 5-8 use a compiled python function, because this is more convenient than asking people to set up the python api in matlab. When running or compiling GenF.py, the python environment should have CasADi binaries (with python interface!!).
+- In newer version of opensimAD (not yet used in PredSim, but we might want to in the future), step 7 can be used to skip step 8-9. The CasADi version in python should not be newer than the one in matlab. Loading serialised files is backward compatible, but writing isn't.
+- Step 10-11 can be skipped.
+- PredSim will load the function the same way as in step 11.
+
 ## Citation
 Please cite this paper in your publications if OpenSimAD helps your research:
   - Falisse A, Serrancolí G, et al. (2019) Algorithmic differentiation improves the computational efficiency of OpenSim-based trajectory optimization of human movement. PLoS ONE 14(10): e0217730. https://doi.org/10.1371/journal.pone.0217730
