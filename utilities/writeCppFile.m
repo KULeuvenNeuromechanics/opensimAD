@@ -226,6 +226,7 @@ fprintf(fid, '#include <OpenSim/Simulation/SimbodyEngine/CustomJoint.h>\n');
 fprintf(fid, '#include <OpenSim/Common/LinearFunction.h>\n');
 fprintf(fid, '#include <OpenSim/Common/PolynomialFunction.h>\n');
 fprintf(fid, '#include <OpenSim/Common/MultiplierFunction.h>\n');
+fprintf(fid, '#include <OpenSim/Common/MultivariatePolynomialFunction.h>\n');
 fprintf(fid, '#include <OpenSim/Common/Constant.h>\n');
 fprintf(fid, '#include <OpenSim/Simulation/Model/SmoothSphereHalfSpaceForce.h>\n');
 fprintf(fid, '#include "SimTKcommon/internal/recorder.h"\n\n');
@@ -401,6 +402,34 @@ for i = 0:jointSet.getSize()-1
                 fprintf(fid, '\tfor (int i = 0; i < %i; ++i) st_%s_%i_coeffs_vec[i] = st_%s_%i_coeffs[i]; \n', c_nCoeffs, c_joint.getName(), coord, c_joint.getName(), coord);
                 fprintf(fid, '\tst_%s[%i].setFunction(new PolynomialFunction(st_%s_%i_coeffs_vec));\n', c_joint.getName(), coord, c_joint.getName(), coord);
 
+            elseif strcmp(dofSel_f.getConcreteClassName(), 'MultivariatePolynomialFunction')
+                c_coord_name = char(dofSel.get_coordinates(0));
+                fprintf(fid, '\tOpenSim::Array<std::string> st_%s_%i_coordinate_names(\"%s\", 1, 1);\n', c_joint.getName(), coord, c_coord_name);
+
+                for i_crd=1:cObj.numCoordinates()-1
+                    try
+                        c_coord_name = char(dofSel.get_coordinates(i_crd));
+                        fprintf(fid, '\tst_%s_%i_coordinate_names.append(\"%s\");\n', c_joint.getName(), coord, c_coord_name);
+                    catch
+                    end
+                end
+                fprintf(fid, '\tst_%s[%i].setCoordinateNames(st_%s_%i_coordinate_names);\n', c_joint.getName(), coord, c_joint.getName(), coord);
+
+                dofSel_f_obj = MultivariatePolynomialFunction.safeDownCast(dofSel_f);
+                dofSel_f_coeffs = dofSel_f_obj.getCoefficients().getAsMat();
+                c_nCoeffs = size(dofSel_f_coeffs, 1);
+                c_dim = dofSel_f_obj.getDimension();
+                c_order = dofSel_f_obj.getOrder();
+                fprintf(fid, '\tosim_double_adouble st_%s_%i_coeffs[%i] = {%.20f', c_joint.getName(), coord, c_nCoeffs, dofSel_f_coeffs(1));
+                for i_coeff=2:c_nCoeffs
+                    fprintf(fid, ', %.20f', dofSel_f_coeffs(i_coeff));
+                end
+                fprintf(fid, '}; \n');
+
+                fprintf(fid, '\tVector st_%s_%i_coeffs_vec(%i); \n' , c_joint.getName(), coord, c_nCoeffs);
+                fprintf(fid, '\tfor (int i = 0; i < %i; ++i) st_%s_%i_coeffs_vec[i] = st_%s_%i_coeffs[i]; \n', c_nCoeffs, c_joint.getName(), coord, c_joint.getName(), coord);
+                fprintf(fid, '\tst_%s[%i].setFunction(new MultivariatePolynomialFunction(st_%s_%i_coeffs_vec, %i, %i));\n', c_joint.getName(), coord, c_joint.getName(), coord, c_dim, c_order);
+
             elseif strcmp(dofSel_f.getConcreteClassName(), 'MultiplierFunction')
                 dofSel_f_obj = MultiplierFunction.safeDownCast(dofSel_f);
                 dofSel_f_obj_scale = dofSel_f_obj.getScale();
@@ -434,6 +463,36 @@ for i = 0:jointSet.getSize()-1
                     fprintf(fid, '\tfor (int i = 0; i < %i; ++i) st_%s_%i_coeffs_vec[i] = st_%s_%i_coeffs[i]; \n', c_nCoeffs, c_joint.getName(), coord, c_joint.getName(), coord);
                     fprintf(fid,  '\tst_%s[%i].setFunction(new MultiplierFunction(new PolynomialFunction(st_%s_%i_coeffs_vec), %.20f));\n', c_joint.getName(), coord, c_joint.getName(), coord, dofSel_f_obj_scale);
 
+                elseif strcmp(dofSel_f_obj_f_name, 'MultivariatePolynomialFunction')
+                    c_coord_name = char(dofSel.get_coordinates(0));
+                    fprintf(fid, '\tOpenSim::Array<std::string> st_%s_%i_coordinate_names(\"%s\", 1, 1);\n', c_joint.getName(), coord, c_coord_name);
+    
+                    for i_crd=1:cObj.numCoordinates()-1
+                        try
+                            c_coord_name = char(dofSel.get_coordinates(i_crd));
+                            fprintf(fid, '\tst_%s_%i_coordinate_names.append(\"%s\");\n', c_joint.getName(), coord, c_coord_name);
+                        catch
+                        end
+                    end
+                    fprintf(fid, '\tst_%s[%i].setCoordinateNames(st_%s_%i_coordinate_names);\n', c_joint.getName(), coord, c_joint.getName(), coord);
+    
+                    dofSel_f_obj = MultivariatePolynomialFunction.safeDownCast(dofSel_f_obj_f);
+                    dofSel_f_coeffs = dofSel_f_obj.getCoefficients().getAsMat();
+                    c_nCoeffs = size(dofSel_f_coeffs, 1);
+                    c_dim = dofSel_f_obj.getDimension();
+                    c_order = dofSel_f_obj.getOrder();
+                    fprintf(fid, '\tosim_double_adouble st_%s_%i_coeffs[%i] = {%.20f', c_joint.getName(), coord, c_nCoeffs, dofSel_f_coeffs(1));
+                    for i_coeff=2:c_nCoeffs
+                        fprintf(fid, ', %.20f', dofSel_f_coeffs(i_coeff));
+                    end
+                    fprintf(fid, '}; \n');
+    
+                    fprintf(fid, '\tVector st_%s_%i_coeffs_vec(%i); \n' , c_joint.getName(), coord, c_nCoeffs);
+                    fprintf(fid, '\tfor (int i = 0; i < %i; ++i) st_%s_%i_coeffs_vec[i] = st_%s_%i_coeffs[i]; \n', c_nCoeffs, c_joint.getName(), coord, c_joint.getName(), coord);
+                    fprintf(fid,  '\tst_%s[%i].setFunction(new MultiplierFunction(new MultivariatePolynomialFunction(st_%s_%i_coeffs_vec, %i, %i), %.20f));\n',...
+                        c_joint.getName(), coord, c_joint.getName(), coord, c_dim, c_order, dofSel_f_obj_scale);
+
+
                 else
                     error('Not supported')
                 end
@@ -443,6 +502,7 @@ for i = 0:jointSet.getSize()-1
                 dofSel_f_obj_value = dofSel_f_obj.getValue();
                 fprintf(fid, '\tst_%s[%i].setFunction(new Constant(%.20f));\n', ...
                         c_joint.getName(), coord, dofSel_f_obj_value);
+
             else
                 error('Not supported');
             end
