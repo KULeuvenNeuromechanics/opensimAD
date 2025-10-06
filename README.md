@@ -23,7 +23,7 @@ This workflow is not limited to full body models. [Any OpenSim model](https://us
 
 ### Limitations
   - Not all OpenSim models are supported:
-    - Your model **should not have locked joints**. Please replace them with weld joints (locked joints would technically require having kinematic constraints, which is possible but makes the problem more complicated).
+    - Your model **should not have locked joints**. Please replace them with weld joints. This can be easily done with [OpenSim Creator](https://www.opensimcreator.com/) by using *Rezero Joint* and *Change Joint Type*.
     - **Constraints will be ignored** (eg, coupling constraints).
     - **SimmSplines are not supported for coordinates**, as their implementation in OpenSim is not really compatible with algorithmic differentiation. See how we replaced the splines of the [LaiArnold_modifed model](https://simtk.org/projects/model-high-flex) with polynomials. SimmSplines in PathPoints etc. are fine, since they do not affect the inverse dynamics.
   - OpenSimAD does not support all features of OpenSim. **Make sure you verify what you are doing**. We have only used OpenSimAD for specific applications.
@@ -68,7 +68,7 @@ Notes
 
 - The workflow is hard-coded to use cmake and visual studio compiler. Modifying this to use another compiler (maybe without cmake) is totally fine.
 - Steps 5-8 use a compiled python function, because this is more convenient than asking people to set up the python api in matlab. When running or compiling GenF.py, the python environment should have CasADi binaries (with python interface!!).
-- In newer version of opensimAD (not yet used in PredSim, but we might want to in the future), step 7 can be used to skip step 8-9. The CasADi version in python should not be newer than the one in matlab. Loading serialised files is backward compatible, but writing isn't.
+- Step 7 can be used to skip step 8-9. The CasADi version in python should not be newer than the one in matlab. Loading serialised files is backward compatible, but writing isn't.The included `GenF.exe` uses CasADi 3.6.2.
 - Step 10-11 can be skipped.
 - PredSim will load the function the same way as in step 11.
 
@@ -87,7 +87,7 @@ To compile this yourself:
   - Create environment: `conda create -n opensimAD pip spyder python=3.8`
   - Activate environment: `conda activate opensimAD`
   - Navigate to the folder where you want to download the code: eg. `cd Documents`
-  - Download code: `git clone https://github.com/Lars-DHondt-KUL/opensimAD.git`
+  - Download code: `git clone https://github.com/KULeuvenNeuromechanics/opensimAD.git`
   - Navigate to the folder: `cd opensimAD`
   - Install required packages: `python -m pip install casadi`
   - Install pyinstaller:  `conda install -c conda-forge pyinstaller`
