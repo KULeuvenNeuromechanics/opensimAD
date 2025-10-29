@@ -12,3 +12,4 @@ InverseDynamics/*
 !InverseDynamics/DefaultPosition.mot
 !InverseDynamics/SetupID
 
+opensimAD-install/*
