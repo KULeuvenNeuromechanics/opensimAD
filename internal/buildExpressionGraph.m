@@ -39,6 +39,8 @@ function [] = buildExpressionGraph(pathOutputFile, pathRecorderStream,...
 % Original date: 8/May/2023 
 % --------------------------------------------------------------------------
 
+useCMake = 0;
+
 %% set paths
 workdir = pwd;
 
@@ -59,6 +61,7 @@ if ispc
 %         delete(zipfilename);
 %     end
 
+if useCMake
     if isempty(generator)
         cmake_generator = '-A x64';
     else
@@ -70,8 +73,11 @@ if ispc
         '" -DSDK_DIR:PATH="' SDK_DIR '" -DCPP_DIR:PATH="' CPP_DIR '"'];
     cmd2 = 'cmake --build . --config RelWithDebInfo';
 
-%     notcmake(pathOutputFile, pathBuild, outputFilename, SDK_DIR)
 
+
+else
+    notcmake(pathOutputFile, pathBuild, outputFilename, SDK_DIR, verbose_mode)
+end
 
 elseif isunix
 
@@ -122,6 +128,8 @@ end
 
 
 %% use cmake to compile .cpp to .exe
+if useCMake
+
 cd(pathBuild);
 if verbose_mode
     system(cmd1);
@@ -133,6 +141,8 @@ if verbose_mode
     system(cmd2);
 else
     [~,~] = system(cmd2);
+end
+
 end
 
 %% run .exe to generate foo.py
@@ -164,6 +174,9 @@ try
     cd(BIN_DIR);
     if ispc
         path_EXE = fullfile(pathBuild, 'RelWithDebInfo', [outputFilename '.exe']);
+        if ~exist(path_EXE,"file")
+            path_EXE = fullfile(pathBuild, [outputFilename '.exe']);
+        end
     elseif isunix
         path_EXE = fullfile(pathBuild, outputFilename);
     end
