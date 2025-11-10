@@ -42,8 +42,6 @@ function [] = buildExpressionGraph(pathOutputFile, pathRecorderStream,...
 %% set paths
 workdir = pwd;
 
-SDK_DIR = fullfile(pathOpenSimAD_install, 'sdk');
-BIN_DIR = fullfile(pathOpenSimAD_install, 'bin');
 
 [CPP_DIR, outputFilename,~] = fileparts(pathOutputFile);
 
@@ -51,72 +49,34 @@ pathBuild = fullfile(pathBuildExpressionGraph, outputFilename);
 
 if ispc
 
-%     % Download libraries if they don't exist locally
-%     if ~isfolder(BIN_DIR)
-%         url = 'https://sourceforge.net/projects/opensimad/files/windows.zip';
-%         zipfilename = websave('windows.zip', url);
-%         unzip(zipfilename, fullfile('opensimAD-install'));
-%         delete(zipfilename);
-%     end
+    SDK_DIR = fullfile(pathOpenSimAD_install, 'sdk');
+    BIN_DIR = fullfile(pathOpenSimAD_install, 'bin');
 
     if isempty(generator)
         cmake_generator = '-A x64';
     else
-        cmake_generator = ['-G ',generator];
+        cmake_generator = ['-G "',generator, '"'];
     end
 
     cmd1 = ['cmake "' pathBuildExpressionGraph '" ', cmake_generator,...
-        ' -DTARGET_NAME:STRING="', outputFilename,...
-        '" -DSDK_DIR:PATH="' SDK_DIR '" -DCPP_DIR:PATH="' CPP_DIR '"'];
-    cmd2 = 'cmake --build . --config RelWithDebInfo';
+        ' -DTARGET_NAME:STRING="', outputFilename, '"',...
+        ' -DCMAKE_CXX_FLAGS="/W0 /EHsc"',...
+        ' -DSDK_DIR:PATH="' SDK_DIR '" -DCPP_DIR:PATH="' CPP_DIR '"'];
+    cmd2 = 'cmake --build . --config Release';
 
-%     notcmake(pathOutputFile, pathBuild, outputFilename, SDK_DIR)
-
+elseif ismac
 
 elseif isunix
 
-    % Check if EBROOTOPENSIMAD is set; if so, use the libraries in it
-    if isenv('EBROOTOPENSIMAD')
-        OpenSimADOS_DIR = getenv('EBROOTOPENSIMAD');
-    else
-        OpenSimADOS_DIR = fullfile(pathOpenSimAD_install, 'linux');
-
-%         % Download libraries if they don't exist locally
-%         if ~isfolder(fullfile(OpenSimADOS_DIR, 'lib'))
-%             url = 'https://sourceforge.net/projects/opensimad/files/linux.tar.gz';
-%             tarfilename = websave('linux.tar.gz', url);
-%             untar(tarfilename, pathOpenSimAD_install);
-%             delete(tarfilename);
-%         end
-    end
-    fprintf('SDK_DIR for building expression graph is %s\n', OpenSimADOS_DIR);
-    
-    cmd1 = ['cmake "' pathBuildExpressionGraph '" -DTARGET_NAME:STRING="' ...
-        outputFilename '" -DSDK_DIR:PATH="' OpenSimADOS_DIR '" -DCPP_DIR:PATH="' CPP_DIR '"' ' -DCMAKE_BUILD_TYPE=Debug'];
-    cmd2 = 'make';
-    
+    SDK_DIR = pathOpenSimAD_install;
     BIN_DIR = pathBuild;
 
-% elseif ismac % not supported further in workflow
-%     pathBuildExpressionGraphOS = fullfile(pathBuildExpressionGraph, 'macOS');
-%     OpenSimADOS_DIR = fullfile(OpenSimAD_DIR, 'macOS');
-% 
-%     pathBuild = fullfile(pathBuildExpressionGraphOS, outputFilename);
-%     mkdir(pathBuild);
-% 
-%     % Download libraries is they don't exist locally
-%     if ~isfolder(fullfile(OpenSimADOS_DIR, 'lib'))
-%         url = 'https://sourceforge.net/projects/opensimad/files/macOS.tgz';
-%         tarfilename = websave('macOS.tgz', url);
-%         untar(tarfilename, fullfile('opensimAD-install'));
-%         delete(tarfilename);
-%     end
-%     
-%     cmd1 = ['cmake "' pathBuildExpressionGraphOS '" -DTARGET_NAME:STRING="' ...
-%         outputFilename '" -DSDK_DIR:PATH="' OpenSimADOS_DIR '" -DCPP_DIR:PATH="' CPP_DIR '"'];
-%     cmd2 = 'make';
-%     
-%     BIN_DIR = pathBuild;
+    cmd1 = ['cmake "' pathBuildExpressionGraph '"',...
+        ' -DTARGET_NAME:STRING="', outputFilename '"' ...
+        ' -DSDK_DIR:PATH="' SDK_DIR '" -DCPP_DIR:PATH="' CPP_DIR '"'
+        ' -DCMAKE_BUILD_TYPE=Release'];
+    cmd2 = 'make';
+    
 
 end
 
@@ -136,10 +96,9 @@ else
 end
 
 %% run .exe to generate foo.py
-% Since it is hardcoded that the generated file is
-% ./opensimAD-install/bin/foo.py, this can cause problems when running
-% multiple opensimAD instances in parallel. To prevent this, we use a file
-% (lockFile.txt) to indicate when opensimAD is generating foo.py.
+% Recorder does not work when running multiple opensimAD instances in 
+% parallel. To prevent this, we use a file (lockFile.txt) to indicate when 
+% recorder is busy.
 lockFile = fullfile(BIN_DIR,'lockFile.txt');
 isLocked = isfile(lockFile);
 t0 = tic;
@@ -149,21 +108,21 @@ while isLocked
     pause(10)
 
     if toc(t0) > 300
-        error(['opensimAD timed out. Another instance of opensimAD took too ',...
-            'long to generate foo.py, or failed to delete its lockFile when done.'])
+        error(['OpenSimAD timed out. Another instance of OpenSimAD took too ',...
+            'long, or failed to delete its lockFile when done.'])
     end
 end
 
 fid = fopen(lockFile,'w');
-fprintf(fid, ['Generating foo.py for ' outputFilename '.']);
-fprintf(fid, 'This file will be deleted after foo.py is generated and copied to its target folder.');
+fprintf(fid, ['Recorder is running for ' outputFilename '.']);
+fprintf(fid, 'This file will be deleted after Recorder finished.');
 fprintf(fid, ['Start: ' datestr(datetime,0)]);
 fclose(fid);
 
 try
     cd(BIN_DIR);
     if ispc
-        path_EXE = fullfile(pathBuild, 'RelWithDebInfo', [outputFilename '.exe']);
+        path_EXE = fullfile(pathBuild, 'Release', [outputFilename '.exe']);
     elseif isunix
         path_EXE = fullfile(pathBuild, outputFilename);
     end

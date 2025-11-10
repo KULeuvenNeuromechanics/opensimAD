@@ -223,7 +223,7 @@ arguments
 
     opts.verify_ID (1,1) logical = true;
 
-    opts.pathOpenSimAD_install (1,:) char = './opensimAD-install';
+    opts.pathOpenSimAD_install (1,:) char = '';
     opts.generator (1,:) char = '';
     opts.verboseMode (1,1) logical = true;
 
@@ -245,8 +245,22 @@ for s=string(fieldnames(options)')
     end
 end
 
-%% Create folders to store temporary files
+% Install libraries if needed
 [pathMain,~,~] = fileparts(mfilename('fullpath'));
+
+if isempty(opts.pathOpenSimAD_install)
+    opts.pathOpenSimAD_install = fullfile(pathMain,'opensimAD-install');
+end
+if ~isfolder(opts.pathOpenSimAD_install)
+    mkdir(opts.pathOpenSimAD_install)
+end
+if (ispc && ~isfolder(fullfile(opts.pathOpenSimAD_install,'bin'))) || ...
+   (isunix && ~isfolder(fullfile(opts.pathOpenSimAD_install,'lib')))
+    opts.pathOpenSimAD_install = downloadOpenSimADLibraries(opts.pathOpenSimAD_install);
+end
+
+
+%% Create folders to store temporary files
 
 addpath(fullfile(pathMain,'internal'))
 

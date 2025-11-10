@@ -15,8 +15,9 @@ outputDir = fullfile(pathMain, 'examples');
 outputFilename = 'F_2pend';
 
 % Compiler
-% opts.generator = 'Visual Studio 17 2022';
-opts.pathOpenSimAD_install = 'C:\GBW_MyPrograms\opensimAD-core\core-install-v3';
+opts.generator = 'Visual Studio 17 2022';
+% opts.pathOpenSimAD_install = 'C:\GBW_MyPrograms\opensimAD-core\core-install-v3';
+% opts.pathOpenSimAD_install = 'C:\GBW_MyPrograms\OpenSimAD-lib\opensim-ad-core-install';
 
 generateADFunction(pathOpenSimModel, outputDir, outputFilename, opts);
 
