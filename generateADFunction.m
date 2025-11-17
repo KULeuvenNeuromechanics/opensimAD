@@ -34,7 +34,13 @@ function [] = generateADFunction(pathOpenSimModel, outputDir,...
 %           - (optional) power due to deformation of each contact element.
 %           This includes only the power of the force normal to the ground 
 %           plane (visco-elastic), not of the in-plane components (friction).
-%           
+%
+% Note: 
+%   This code ignores the contribution of the patella to the inverse
+%   dynamics. Assuming the patella bodies are named 'patella_l' and
+%   'patella_r', the joint names include 'patel', and the coordinate names
+%   are 'knee_angle_l_beta' and 'knee_angle_r_beta'.
+%
 %   The optional inputs and outputs of F are configured via the arguments
 %   below:
 %
@@ -49,6 +55,14 @@ function [] = generateADFunction(pathOpenSimModel, outputDir,...
 %   - outputFilename -
 %   * name of the generated file [char]
 %
+%   - options -
+%   * Options as fileds in a struct
+%
+%   - opts -
+%   * Options as name-value pairs
+%
+% OPTIONS:
+
 %   - jointsOrder -
 %   * names of joints in order they should appear in the external function
 %   input/output. Pass empty to use order they are in the model file. 
@@ -103,6 +117,14 @@ function [] = generateADFunction(pathOpenSimModel, outputDir,...
 %       export3DVelocities(1).point_in_body = [0, -0.012, 0];
 %       export3DVelocities(1).name = 'left_shin';
 %
+%   - export3DVelocitiesProjGround -
+%   * points of which the velocity, projected on the ground, should be 
+%   exported. [array of structs] 
+%   Example input:
+%       export3DVelocities(1).body = 'tibia_l';
+%       export3DVelocities(1).point_in_body = [0, -0.012, 0];
+%       export3DVelocities(1).name = 'left_shin';
+%
 %   - exportGRFs -
 %   * export total ground reaction force of left and right side. [bool]
 %
@@ -115,48 +137,47 @@ function [] = generateADFunction(pathOpenSimModel, outputDir,...
 %   - exportContactPowers -
 %   * export deformation power of each contact element. [bool]
 %
-%   - compiler -
-%   * command prompt argument for the compiler. [char]
+%   - verify_ID -
+%   * the generated function is verified versus the inverse dynamics tool
+%   in OpenSim if true. [bool]
+%
+%   - pathOpenSimAD_install -
+%   * Path where the OpenSimAD libraries are installed, or should be
+%   installed. [char]
+%
+%   - generator -
+%   * command prompt argument for cmake. [char]
 %   Example inputs:
 %       Visual studio 2015: 'Visual Studio 14 2015 Win64'
 %       Visual studio 2017: 'Visual Studio 15 2017 Win64'
 %       Visual studio 2017: 'Visual Studio 16 2019'
 %       Visual studio 2017: 'Visual Studio 17 2022'
 %
-%   - verboseMode -
-%   * outputs from windows command prompt are printed to matlab command 
-%   window if true. [bool]
+%   - buildType -
+%   * Build type of the OpenSimAD libraries. [char]
+%   'Release','RelWithDebInfo','Debug','MinSizeRel'
 %
-%   - verify_ID -
-%   * the generated function is verified versus the inverse dynamics tool
-%   in OpenSim if true. [bool]
+%   - verbosityLevel -
+%   * Controls how much information is printed to the matlab command 
+%   window. [int]
+%       0: none
+%       1: basic
+%       2: debug
 %
-%   - secondOrderDerivatives -
-%   * The generated library always contains the expression graphs to evaluate
-%   the Jacobian of the external function. If this input is true, expression
-%   graphs for evaluating second derivative information are also added. Do 
-%   note that this greatly increases the compiling time, especially for models
-%   with many degrees of freedom. [bool]
-%
-%   - noDll -
-%   * if true, no .dll (or .lib) files are generated. [bool]
 %
 % OUTPUT:
 %   This function does not return outputs, but generates files. Assuming 
 %   outputFilename = 'filename', the following files are saved in the folder 
 %   given by outputDir. 
-%   - filename.dll -
-%   * file containing the CasADi external function. To get the function in
-%   matlab, use: F = external('F','filename.dll')
+%   - filename.casadi -
+%   * serialised CasADi Function. Can be loaded into MATLAB via 
+%       F = Function.load('filename.casadi');
 %   This function takes a column vector as input, and returns a column 
 %   vector as output. For more info on external functions, 
 %   see https://web.casadi.org/docs/#using-the-generated-code
 %
 %   - filename.cpp -
 %   * source code for the .dll, you do not need this.
-%
-%   - filename.lib -
-%   * if you want to compile code that calls filename.dll, you need this.
 %
 %   - filename_IO.mat -
 %   * contains a struct (IO) where the fieldnames denote an output of the
@@ -173,12 +194,6 @@ function [] = generateADFunction(pathOpenSimModel, outputDir,...
 %   Note that not every version of CasADi can load this Function. 
 %   v3.6.3 is confirmed to work, v3.5.5 is confirmed to not work
 % 
-%
-% Note: 
-%   This code ignores the contribution of the patella to the inverse
-%   dynamics. Assuming the patella bodies are named 'patella_l' and
-%   'patella_r', the joint names include 'patel', and the coordinate names
-%   are 'knee_angle_l_beta' and 'knee_angle_r_beta'.
 %
 % Reference: 
 %   Falisse A, Serrancolí G, et al. (2019) Algorithmic differentiation 
@@ -216,16 +231,14 @@ arguments
     opts.exportGRMs (1,1) logical = false;
     opts.exportSeparateGRFs (1,1) logical = false;
     opts.exportContactPowers (1,1) logical = false;
-    
-    opts.createSerialisedFunction (1,1) logical = true;
-    opts.createSharedLibrary (1,1) logical = false;
-    opts.secondOrderDerivatives (1,1) logical = false;
 
     opts.verify_ID (1,1) logical = true;
 
     opts.pathOpenSimAD_install (1,:) char = '';
     opts.generator (1,:) char = '';
-    opts.verboseMode (1,1) logical = true;
+    opts.buildType (1,:) char {mustBeMember(opts.buildType,...
+        {'Release','RelWithDebInfo','Debug','MinSizeRel'})} = 'Release';
+    opts.verbosityLevel (1,1) double {mustBeInteger} = 1;
 
 
 end
@@ -248,6 +261,9 @@ end
 % Install libraries if needed
 [pathMain,~,~] = fileparts(mfilename('fullpath'));
 
+addpath(fullfile(pathMain,'internal'))
+addpath(fullfile(pathMain,'utilities'))
+
 if isempty(opts.pathOpenSimAD_install)
     opts.pathOpenSimAD_install = fullfile(pathMain,'opensimAD-install');
 end
@@ -261,50 +277,53 @@ end
 
 
 %% Create folders to store temporary files
-
-addpath(fullfile(pathMain,'internal'))
-
-pathBuildExpressionGraph = fullfile(pathMain, 'buildExpressionGraph');
-if ispc
-    pathBuildExpressionGraph = fullfile(pathBuildExpressionGraph,'windows');
-elseif isunix
-    pathBuildExpressionGraph = fullfile(pathBuildExpressionGraph,'linux');
-end
-pathRecorderStream = fullfile(pathBuildExpressionGraph,outputFilename,[outputFilename,'.m']);
+dirRecorderSource = fullfile(pathMain, 'intermediateFiles', 'AD-Recorder-source');
+dirRecorderBuild = fullfile(pathMain, 'intermediateFiles', 'AD-Recorder-build');
+dirFunctionSource = fullfile(pathMain, 'intermediateFiles', 'AD-Function-source');
+% if ispc
+%     dirRecorderBuild = fullfile(dirRecorderBuild,'windows');
+% elseif ismac
+%     dirRecorderBuild = fullfile(dirRecorderBuild,'macOS');
+% elseif isunix
+%     dirRecorderBuild = fullfile(dirRecorderBuild,'linux');
+% end
+pathRecorderStream = fullfile(dirFunctionSource, outputFilename,...
+    [outputFilename,'.m']);
 pathOutputFile = replace(fullfile(outputDir, outputFilename),'\','/');
+pathRecorderSource = replace(fullfile(dirRecorderSource, outputFilename,...
+    [outputFilename,'.cpp']),'\','/');
 
-if ~exist(fullfile(pathBuildExpressionGraph,outputFilename),"dir")
-    mkdir(fullfile(pathBuildExpressionGraph,outputFilename));
+if ~exist(fullfile(dirRecorderSource,outputFilename),"dir")
+    mkdir(fullfile(dirRecorderSource,outputFilename));
+end
+if ~exist(fullfile(dirRecorderBuild,outputFilename),"dir")
+    mkdir(fullfile(dirRecorderBuild,outputFilename));
+end
+if ~exist(fullfile(dirFunctionSource,outputFilename),"dir")
+    mkdir(fullfile(dirFunctionSource,outputFilename));
 end
 if ~exist(outputDir, 'dir')
     mkdir(outputDir);
 end
 
 %% Write the cpp file.
-nInputsF = writeCppFile(pathOpenSimModel, pathOutputFile, pathRecorderStream, opts);
+nInputsF = writeCppFile(pathOpenSimModel, pathRecorderSource,...
+    pathOutputFile, pathRecorderStream, opts);
 
 %% Build expression graph
-buildExpressionGraph(pathOutputFile, pathRecorderStream,...
-    pathBuildExpressionGraph, opts.pathOpenSimAD_install,...
-    opts.generator, opts.verboseMode);
+buildExpressionGraph(pathRecorderSource, dirRecorderBuild,...
+    opts.pathOpenSimAD_install,...
+    opts.generator, opts.buildType, opts.verbosityLevel);
 
 %% Generate code with expression graph and derivative information
-generateFunction(nInputsF, pathRecorderStream, pathOutputFile,...
-    opts.createSerialisedFunction, opts.createSharedLibrary,...
-    opts.secondOrderDerivatives);
+generateFunction(nInputsF, pathRecorderStream, pathOutputFile);
 
-
-%% Build external Function (.dll file).
-if opts.createSharedLibrary
-    warning("nope")
-    buildExternalFunction(fooPath, outputFilename, outputDir, compiler, verboseMode);
-end
 
 %% Verification
 % Run ID with the .osim file and verify that we can get the same torques as
 % with the external function.
 if opts.verify_ID
-    VerifyInverseDynamics(pathOpenSimModel, outputDir, outputFilename, opts.verboseMode);
+    VerifyInverseDynamics(pathOpenSimModel, outputDir, outputFilename, opts.verbosityLevel);
 end
 
 %% Clean-up

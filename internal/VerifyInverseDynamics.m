@@ -1,4 +1,4 @@
-function [] = VerifyInverseDynamics(pathOpenSimModel, outputDir, outputFilename, verbose_mode)
+function [] = VerifyInverseDynamics(pathOpenSimModel, outputDir, outputFilename, verbosityLevel)
 % --------------------------------------------------------------------------
 % VerifyInverseDynamics
 %   Compare the inverse dynamics outputs of the external function versus
@@ -15,9 +15,12 @@ function [] = VerifyInverseDynamics(pathOpenSimModel, outputDir, outputFilename,
 %   - outputFilename -
 %   * name of the generated file [char]
 %
-%   - verbose_mode -
-%   * outputs from windows command prompt are printed to matlab command 
-%   window if true. [bool]
+%   - verbosityLevel -
+%   * Controls how much information is printed to the matlab command 
+%   window. [int]
+%       0: none
+%       1: basic
+%       2: debug
 %
 %
 % OUTPUT:
@@ -37,9 +40,9 @@ function [] = VerifyInverseDynamics(pathOpenSimModel, outputDir, outputFilename,
 import org.opensim.modeling.*;
 import casadi.*
 
-[pathUtilities,~,~] = fileparts(mfilename('fullpath'));
-[pathMain,~,~] = fileparts(pathUtilities);
-pathID = fullfile(pathMain, 'InverseDynamics');
+[pathInternal,~,~] = fileparts(mfilename('fullpath'));
+[pathMain,~,~] = fileparts(pathInternal);
+pathID = fullfile(pathMain, 'intermediateFiles', 'InverseDynamics');
 
 [~,osimFileName,~] = fileparts(pathOpenSimModel);
 
@@ -59,13 +62,14 @@ if isfield(IO.input.Qs, 'pelvis_ty')
 end
 
 %% Run ID with the .osim file 
-model = Model(pathOpenSimModel);
-model.initSystem();
-coordinateSet = model.getCoordinateSet();
 
 % Generate .mot file with same position inputs
 mot_file = ['Verify_', outputFilename, '.mot'];
-path_mot = fullfile(pathID, mot_file);
+path_mot = fullfile(pathID, outputFilename, mot_file);
+
+if ~isfolder(fullfile(pathID, outputFilename))
+    mkdir(fullfile(pathID, outputFilename))
+end
 
 if ~exist(path_mot, 'file')
     labels = [{'time'}, coordinatesOrder'];
@@ -81,25 +85,22 @@ if ~exist(path_mot, 'file')
     write_motionFile_v40(q, path_mot)
 end
 
+% ID tool setup
 pathGenericIDSetupFile = fullfile(pathID, 'SetupID.xml');
 idTool = InverseDynamicsTool(pathGenericIDSetupFile);
 idTool.setName('ID_withOsimAndIDTool');
 idTool.setModelFileName(pathOpenSimModel);
-idTool.setResultsDir(outputDir);
+idTool.setResultsDir(fullfile(pathID, outputFilename));
 idTool.setCoordinatesFileName(path_mot);
 idTool.setOutputGenForceFileName('ID_withOsimAndIDTool.sto');
-pathSetupID = fullfile(outputDir, 'SetupID.xml');
+pathSetupID = fullfile(pathID, outputFilename, 'SetupID.xml');
 idTool.print(pathSetupID);
 
-command = ['opensim-cmd', ' run-tool ', '"' pathSetupID '"'];
-if verbose_mode
-    system(command);
-else
-    [~,~] = system(command);
-end
+[~,~] = system(['opensim-cmd run-tool "', pathSetupID, '"']);
+
 
 % Extract torques from .osim + ID tool.
-data = importdata(fullfile(outputDir, 'ID_withOsimAndIDTool.sto'));
+data = importdata(fullfile(pathID, outputFilename, 'ID_withOsimAndIDTool.sto'));
 
 ID_osim = zeros(nCoordinates, 1);
 for count = 1:numel(coordinatesOrder)
@@ -113,50 +114,24 @@ for count = 1:numel(coordinatesOrder)
 
 end
 
-%% Compare torques from external function.
-if ispc
-    fileExt = '.dll';
-elseif isunix
-    fileExt = '.so';
-end
-dllPath = replace(fullfile(outputDir, [outputFilename, fileExt]),'\','/');
-if isfile(dllPath)
-    F = external('F', dllPath);
-    ID_F = full(F(vec1));
-    ID_F = ID_F(1:nCoordinates);
-    
-    % Assert we get the same torques.
-    test_diff = max(abs(ID_osim - ID_F)) < 1e-6;
-    if test_diff
-        disp(['Inverse dynamics from "', outputFilename, fileExt...
-            '" matches IDTool for "', osimFileName, '.osim".'])
-    else
-        warning(['Inverse dynamics from "', outputFilename, fileExt...
-            '" does not match IDTool for "', osimFileName, '.osim".']);
-    end
- 
-end
+
 
 %% Compare torques from external function.
 funPath = replace(fullfile(outputDir, [outputFilename, '.casadi']),'\','/');
 if isfile(funPath)
-    try
-        cd(outputDir);
-        F = casadi.Function.load(funPath);
-    catch cas_e
-        warning(['Unable to load "',funPath,...
-            '" with CasADi libraries located in "',GlobalOptions.getCasadiPath(),'".']);
-%         rethrow(cas_e)
-    end
+
+    F = casadi.Function.load(funPath);
+
     ID_F = full(F(vec1));
     ID_F = ID_F(1:nCoordinates);
     
     % Assert we get the same torques.
     test_diff = max(abs(ID_osim - ID_F)) < 1e-6;
     if test_diff
-        disp(['Inverse dynamics from "', outputFilename,...
-            '.casadi" matches IDTool for "', osimFileName '.osim".'])
-        
+        if verbosityLevel >= 1
+            disp(['Inverse dynamics from "', outputFilename,...
+                '.casadi" matches IDTool for "', osimFileName '.osim".'])
+        end
     else
         warning(['Inverse dynamics from "', outputFilename,...
             '.casadi" does not match IDTool for "', osimFileName '.osim".']);
@@ -164,9 +139,5 @@ if isfile(funPath)
 
 end
 
-%% Clean-up
-delete(fullfile(outputDir, 'ID_withOsimAndIDTool.sto'));
-delete(path_mot);
-delete(pathSetupID);
 
 end

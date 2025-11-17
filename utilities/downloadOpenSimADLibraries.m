@@ -1,14 +1,17 @@
 function [path_installed] = downloadOpenSimADLibraries(path_install, version, overwrite)
 % --------------------------------------------------------------------------
 % downloadOpenSimADLibraries
-%   Download precompiled binaries with the OpenSimAD libraries 
+%   Download the OpenSimAD libraries as precompiled binaries.
 %
 % INPUT:
-%   - path_install -
+%   - path_install - (optional) Default: './opensimAD-install'
 %   * Where to put them
 %
-%   - version -
+%   - version - (optional) Default: latest release
 %   * Version tag of the release
+%
+%   - overwite - (optional) Default: false
+%   * Overwrite previous download in path_install?
 %
 % 
 % Original author: Lars D'Hondt
@@ -24,7 +27,7 @@ end
 url_repo = 'https://github.com/Lars-DHondt-KUL/opensimAD-core/releases/download/';
 
 
-if ispc
+if ispc % Windows
     filename = 'opensimad-install-windows.zip';
     dirname = ['windows-',version];
     path_installed = fullfile(path_install,dirname);
@@ -38,10 +41,10 @@ if ispc
     unzip(zipfilename, path_installed);
     delete(zipfilename);
 
-elseif ismac
-    error("No binaries available")
+elseif ismac % macOS
+    error("No binaries available. Consider building from source.")
 
-elseif isunix
+elseif isunix % Linux
     filename = 'opensimad-install-linux.tar';
     dirname = ['linux-',version];
     path_installed = fullfile(path_install,dirname);

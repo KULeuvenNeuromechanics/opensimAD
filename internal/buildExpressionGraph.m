@@ -1,33 +1,34 @@
-function [] = buildExpressionGraph(pathOutputFile, pathRecorderStream,...
-    pathBuildExpressionGraph, pathOpenSimAD_install, generator, verbose_mode)
+function [] = buildExpressionGraph(pathRecorderSource, dirRecorderBuild,...
+    pathOpenSimAD_install, generator, build_type, verbosityLevel)
 % --------------------------------------------------------------------------
 % buildExpressionGraph
 %   Generates an expression graph and saves it as python code (foo.py)
 %
 %
 % INPUT:
-%   - outputFilename -
-%   * name of the generated file [char]
+%   - pathRecorderSource -
+%   * source code to run AD-recorder (.pp) [char]
 %
-%   - outputDir -
-%   * full path to directory where the generated file should be saved [char]
+%   - dirRecorderBuild -
+%   * full path to directory where the AD-recorder application should be [char]
+%
+%   - pathOpenSimAD_install -
+%   *
 %
 %   - generator -
-%   * command prompt argument for the compiler. [char]
-%   Example inputs:
-%       Visual studio 2015: 'Visual Studio 14 2015 Win64'
-%       Visual studio 2017: 'Visual Studio 15 2017 Win64'
-%       Visual studio 2017: 'Visual Studio 16 2019'
-%       Visual studio 2017: 'Visual Studio 17 2022'
+%   * command prompt argument for cmake. [char]
 %
-%   - verbose_mode -
-%   * outputs from windows command prompt are printed to matlab command 
-%   window if true. [bool]
+%   - buildType -
+%   * Build type of the OpenSimAD libraries. [char]
+%   'Release','RelWithDebInfo','Debug','MinSizeRel'
 %
+%   - verbosityLevel -
+%   * Controls how much information is printed to the matlab command 
+%   window. [int]
+%       0: none
+%       1: basic
+%       2: debug
 %
-% OUTPUT:
-%   - pathFoo -
-%   * path to the folder where foo.py is
 %
 % Reference: 
 %   Falisse A, Serrancolí G, et al. (2019) Algorithmic differentiation 
@@ -39,66 +40,87 @@ function [] = buildExpressionGraph(pathOutputFile, pathRecorderStream,...
 % Original date: 8/May/2023 
 % --------------------------------------------------------------------------
 
-%% set paths
 workdir = pwd;
 
+%% Prepare information to be passed to cmake
 
-[CPP_DIR, outputFilename,~] = fileparts(pathOutputFile);
+[CPP_DIR, outputFilename,~] = fileparts(pathRecorderSource);
 
-pathBuild = fullfile(pathBuildExpressionGraph, outputFilename);
 
-if ispc
+if ispc % Windows
 
     SDK_DIR = fullfile(pathOpenSimAD_install, 'sdk');
     BIN_DIR = fullfile(pathOpenSimAD_install, 'bin');
 
+    % generator (-G) and platform (-A) arguments for cmake
     if isempty(generator)
         cmake_generator = '-A x64';
+    elseif contains(generator, '64')
+        cmake_generator = ['-G "', generator, '"'];
     else
-        cmake_generator = ['-G "',generator, '"'];
+        cmake_generator = ['-G "', generator, '" -A x64'];
     end
 
-    cmd1 = ['cmake "' pathBuildExpressionGraph '" ', cmake_generator,...
-        ' -DTARGET_NAME:STRING="', outputFilename, '"',...
-        ' -DCMAKE_CXX_FLAGS="/W0 /EHsc"',...
-        ' -DSDK_DIR:PATH="' SDK_DIR '" -DCPP_DIR:PATH="' CPP_DIR '"'];
-    cmd2 = 'cmake --build . --config Release';
+    % flags to pass to the c++ compiler
+    cpp_flags = '/EHsc'; % Exception handling used in opensimAD libraries
 
-elseif ismac
+    if verbosityLevel < 3
+        cpp_flags = [cpp_flags, ' /W0']; % Suppres all compiler warnings.
+    end
 
-elseif isunix
+
+    pathBuild = fullfile(dirRecorderBuild, outputFilename);
+    cd(pathBuild)
+    
+elseif isunix % linux or macOS
 
     SDK_DIR = pathOpenSimAD_install;
-    BIN_DIR = pathBuild;
+    BIN_DIR = pathOpenSimAD_install;
 
-    cmd1 = ['cmake "' pathBuildExpressionGraph '"',...
-        ' -DTARGET_NAME:STRING="', outputFilename '"' ...
-        ' -DSDK_DIR:PATH="' SDK_DIR '" -DCPP_DIR:PATH="' CPP_DIR '"'
-        ' -DCMAKE_BUILD_TYPE=Release'];
-    cmd2 = 'make';
+    % generator (-G) argument for cmake
+    if isempty(generator)
+        cmake_generator = '-G "Unix Makefiles"';
+    else
+        cmake_generator = ['-G "', generator, '"'];
+    end
+
+    % flags to pass to the c++ compiler
+    cpp_flags = '';
     
-
 end
 
 
-%% use cmake to compile .cpp to .exe
-cd(pathBuild);
-if verbose_mode
-    system(cmd1);
+
+%% Use cmake to build application that runs AD-recorder for the OpenSim model
+
+cmd_config = ['cmake "' dirRecorderBuild '" ',...
+        cmake_generator,...
+        ' -DCMAKE_CXX_FLAGS="',cpp_flags, '"',... 
+        ' -DTARGET_NAME:STRING="', outputFilename, '"',...
+        ' -DSDK_DIR:PATH="' SDK_DIR '" -DCPP_DIR:PATH="' CPP_DIR '"'];
+
+cmd_build = ['cmake --build . --config ', build_type];
+
+if verbosityLevel >= 2
+    fprintf("Configuring CMake\n")
+    system(cmd_config);
+    fprintf("\nBuilding\n")
+    system(cmd_build);
+
 else
-    [~,~] = system(cmd1);
+    [~,~] = system(cmd_config);
+    [~,~] = system(cmd_build);
+
 end
 
-if verbose_mode
-    system(cmd2);
-else
-    [~,~] = system(cmd2);
-end
 
-%% run .exe to generate foo.py
+
+%% Run application that runs AD-recorder for the OpenSim model
 % Recorder does not work when running multiple opensimAD instances in 
 % parallel. To prevent this, we use a file (lockFile.txt) to indicate when 
 % recorder is busy.
+% TODO: is there a cleaner way to do this? Implement inside recorder?
+
 lockFile = fullfile(BIN_DIR,'lockFile.txt');
 isLocked = isfile(lockFile);
 t0 = tic;
@@ -119,15 +141,21 @@ fprintf(fid, 'This file will be deleted after Recorder finished.');
 fprintf(fid, ['Start: ' datestr(datetime,0)]);
 fclose(fid);
 
-try
-    cd(BIN_DIR);
-    if ispc
-        path_EXE = fullfile(pathBuild, 'Release', [outputFilename '.exe']);
-    elseif isunix
-        path_EXE = fullfile(pathBuild, outputFilename);
-    end
+%
+if verbosityLevel >= 2
+    fprintf("\nRunning AD-recorder\n")
+end
 
-    system(['"' path_EXE '"']);
+try
+    
+    if ispc % Windows
+        cd(BIN_DIR); % So windows knows where the binaries are
+        system(['"' fullfile(pathBuild, build_type, [outputFilename '.exe']) '"']);
+        cd(workdir)
+
+    elseif isunix % macOS or Linux
+        system(['"' fullfile(pathBuild, outputFilename) '"']);
+    end
 
 catch ME
     % clean-up
@@ -139,6 +167,6 @@ catch ME
 end
 
 delete(lockFile)
-cd(workdir)
 
-end
+
+end % end of function

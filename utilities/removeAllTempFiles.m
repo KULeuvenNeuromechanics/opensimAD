@@ -22,8 +22,10 @@ function [] = removeAllTempFiles(varargin)
 [pathMain,~,~] = fileparts(pathUtilities);
 
 
-temp_dirs = ["buildExpressionGraph/windows", "buildExpressionGraph/linux"...
-    "buildExternalFunction", "installExternalFunction"];
+temp_dirs = ["intermediateFiles/AD-Recorder-source",...
+    "intermediateFiles/AD-Recorder-build"...
+    "intermediateFiles/AD-Function-source",...
+    "intermediateFiles/InverseDynamics"];
 
 for temp_dir=temp_dirs
     dir1 = dir(fullfile(pathMain, char(temp_dir)));
@@ -37,16 +39,6 @@ for temp_dir=temp_dirs
         end
     end
 
-end
-
-lockFile = fullfile(pathMain, 'OpenSimAD-install', 'bin', 'lockFile.txt');
-if isfile(lockFile)
-    delete(lockFile)
-end
-
-path_bin_foo = fullfile(pathMain, 'OpenSimAD-install', 'bin', 'foo.py');
-if isfile(path_bin_foo)
-    delete(path_bin_foo)
 end
 
 end

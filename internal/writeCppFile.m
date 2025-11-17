@@ -1,4 +1,5 @@
-function [nInputsF] = writeCppFile(pathOpenSimModel, pathOutputFile, pathRecorderStream, options)
+function [nInputsF] = writeCppFile(pathOpenSimModel, pathRecorderSource, ...
+    pathOutputFile, pathRecorderStream, options)
 % --------------------------------------------------------------------------
 % writeCppFile
 %   Writes a .cpp file that contains the source code for generating a
@@ -20,8 +21,12 @@ function [nInputsF] = writeCppFile(pathOpenSimModel, pathOutputFile, pathRecorde
 %   - pathOpenSimModel -
 %   * full path to OpenSim model file (.osim) [char]
 %
+%   - pathRecorderSource -
+%   * full path to directory where the generated cpp file should be saved [char]
+%
 %   - outputDir -
-%   * full path to directory where the generated file should be saved [char]
+%   * full path to directory where the generated function and its metadata
+%   should be saved [char]
 %
 %   - outputFilename -
 %   * name of the generated file [char]
@@ -203,7 +208,7 @@ end
 
 
 %% Include headers and generic helper function
-fid = fopen([pathOutputFile,'.cpp'],'w');
+fid = fopen(pathRecorderSource,'w');
 
 % TODO: only include those that are necessary (model-specific).
 fprintf(fid, '#include <OpenSim/Simulation/Model/Model.h>\n');

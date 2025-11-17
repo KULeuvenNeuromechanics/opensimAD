@@ -15,7 +15,10 @@ outputDir = fullfile(pathMain, 'examples');
 outputFilename = 'F_2pend';
 
 % Compiler
+opts.verbosityLevel = 2;
 opts.generator = 'Visual Studio 17 2022';
+% opts.generator = 'Visual Studio 15 2017 Win64';
+
 % opts.pathOpenSimAD_install = 'C:\GBW_MyPrograms\opensimAD-core\core-install-v3';
 % opts.pathOpenSimAD_install = 'C:\GBW_MyPrograms\OpenSimAD-lib\opensim-ad-core-install';
 

@@ -1,5 +1,4 @@
-function [] = generateFunction(nInputs, fooPath, pathOutputFile,...
-    createSerialisedFunction, createSharedLibrary, secondOrderDerivatives)
+function [] = generateFunction(nInputs, fooPath, pathOutputFile)
 % --------------------------------------------------------------------------
 % generateFunction
 %   Generates an expression graph of the function and its derivative
@@ -8,17 +7,14 @@ function [] = generateFunction(nInputs, fooPath, pathOutputFile,...
 %
 % INPUT:
 %   - nInputs -
-%   * number of input arguments for the external function [double]
+%   * number of input arguments for the AD function [double]
 %
 %   - fooPath -
-%   * path to foo.py [char]
+%   * path to foo.m [char]
 %
-%   - secondOrderDerivatives -
-%   * do you want to calculate 2nd derivatives of external function outputs 
-%   w.r.t. inputs? [bool]
-%
-%   - generateCSource -
-%   * generate source code (c), otherwise
+%   - pathOutputFile -
+%   * path where the generated file should be created, without file
+%   extension. [char]
 %
 % OUTPUT:
 %   - (This function does not return output arguments) -
@@ -46,28 +42,7 @@ arg = SX.sym('arg', nInputs);
 [y, ~, ~] = foo(arg);
 F = Function('F', {arg}, {y});
 
-if createSerialisedFunction
-    F.save([pathOutputFile,'.casadi']);
-end
-
-if createSharedLibrary
-    % Generate source code for shared library
-    cg = CodeGenerator(fullfile(fooDir,[fooName,'.c']));
-    cg.add(F);
-    cg.add(F.jacobian());
-
-    if secondOrderDerivatives
-    % Include functions to evaluate forward, reverse, and 
-    % forward-over-reverse to use an exact Hessian.
-        Fr = F.reverse(1);
-        cg.add(Fr);
-        for i=0:6
-            cg.add(F.forward(2^i));
-            cg.add(Fr.forward(2^i));
-        end
-    end
-    cg.generate();
-end
+F.save([pathOutputFile,'.casadi']);
 
 
 end
