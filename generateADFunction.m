@@ -237,7 +237,7 @@ arguments
     opts.pathOpenSimAD_install (1,:) char = '';
     opts.generator (1,:) char = '';
     opts.buildType (1,:) char {mustBeMember(opts.buildType,...
-        {'Release','RelWithDebInfo','Debug','MinSizeRel'})} = 'Release';
+        {'Release','RelWithDebInfo','Debug','MinSizeRel',''})} = '';
     opts.verbosityLevel (1,1) double {mustBeInteger} = 1;
 
 
@@ -258,7 +258,7 @@ for s=string(fieldnames(options)')
     end
 end
 
-% Install libraries if needed
+%% Install libraries if needed
 [pathMain,~,~] = fileparts(mfilename('fullpath'));
 
 addpath(fullfile(pathMain,'internal'))
@@ -275,18 +275,36 @@ if (ispc && ~isfolder(fullfile(opts.pathOpenSimAD_install,'bin'))) || ...
     opts.pathOpenSimAD_install = downloadOpenSimADLibraries(opts.pathOpenSimAD_install);
 end
 
+%% Check build type of libraries
+if ispc
+    pathVersionFile = fullfile(opts.pathOpenSimAD_install,'sdk','OpenSim_buildinfo.txt');
+elseif isunix
+    pathVersionFile = fullfile(opts.pathOpenSimAD_install,'etc','OpenSim_buildinfo.txt');
+end
+if exist(pathVersionFile,"file")
+    txtf = readlines(pathVersionFile);
+    idx = find(strncmp(txtf,'Build Type',10));
+    if ~isempty(idx)
+        build_type_lib = replace(txtf(idx),'Build Type=','');
+        if isempty(opts.buildType)
+            % if buildType wasn't set, use same as libraries
+            opts.buildType = char(build_type_lib);
+        elseif ~strcmp(opts.buildType,build_type_lib)
+            warning("option buildType is set to '%s', but libraries are '%s'",...
+                opts.buildType, build_type_lib)
+        end
+    end
+end
+
+if isempty(opts.buildType)
+    opts.buildType = 'Release';
+end
 
 %% Create folders to store temporary files
 dirRecorderSource = fullfile(pathMain, 'intermediateFiles', 'AD-Recorder-source');
 dirRecorderBuild = fullfile(pathMain, 'intermediateFiles', 'AD-Recorder-build');
 dirFunctionSource = fullfile(pathMain, 'intermediateFiles', 'AD-Function-source');
-% if ispc
-%     dirRecorderBuild = fullfile(dirRecorderBuild,'windows');
-% elseif ismac
-%     dirRecorderBuild = fullfile(dirRecorderBuild,'macOS');
-% elseif isunix
-%     dirRecorderBuild = fullfile(dirRecorderBuild,'linux');
-% end
+
 pathRecorderStream = fullfile(dirFunctionSource, outputFilename,...
     [outputFilename,'.m']);
 pathOutputFile = replace(fullfile(outputDir, outputFilename),'\','/');

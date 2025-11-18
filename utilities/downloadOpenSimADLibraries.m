@@ -20,7 +20,7 @@ function [path_installed] = downloadOpenSimADLibraries(path_install, version, ov
 
 arguments
     path_install = './opensimAD-install';
-    version = 'v0.1.0';
+    version = 'v0.2.0';
     overwrite = false;
 end
 
