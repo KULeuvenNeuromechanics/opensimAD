@@ -116,30 +116,6 @@ end
 
 
 %% Run application that runs AD-recorder for the OpenSim model
-% Recorder does not work when running multiple opensimAD instances in 
-% parallel. To prevent this, we use a file (lockFile.txt) to indicate when 
-% recorder is busy.
-% TODO: is there a cleaner way to do this? Implement inside recorder?
-
-lockFile = fullfile(BIN_DIR,'lockFile.txt');
-isLocked = isfile(lockFile);
-t0 = tic;
-
-while isLocked
-    isLocked = isfile(lockFile);
-    pause(10)
-
-    if toc(t0) > 300
-        error(['OpenSimAD timed out. Another instance of OpenSimAD took too ',...
-            'long, or failed to delete its lockFile when done.'])
-    end
-end
-
-fid = fopen(lockFile,'w');
-fprintf(fid, ['Recorder is running for ' outputFilename '.']);
-fprintf(fid, 'This file will be deleted after Recorder finished.');
-fprintf(fid, ['Start: ' datestr(datetime,0)]);
-fclose(fid);
 
 %
 if verbosityLevel >= 2
@@ -159,7 +135,6 @@ try
 
 catch ME
     % clean-up
-    delete(lockFile)
     cd(workdir)
 
     % error
