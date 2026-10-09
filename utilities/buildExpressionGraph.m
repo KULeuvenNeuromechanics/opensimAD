@@ -1,5 +1,5 @@
 function [pathFoo] = buildExpressionGraph(outputFilename,...
-    outputDir, compiler, verbose_mode)
+    outputDir, compiler, verbose_mode, buildRoot)
 % --------------------------------------------------------------------------
 % buildExpressionGraph
 %   Generates an expression graph and saves it as python code (foo.py)
@@ -28,6 +28,7 @@ function [pathFoo] = buildExpressionGraph(outputFilename,...
 % OUTPUT:
 %   - pathFoo -
 %   * path to the folder where foo.py is
+%   * caller owns this temporary folder and must remove it after use
 %
 % Reference: 
 %   Falisse A, Serrancolí G, et al. (2019) Algorithmic differentiation 
@@ -40,79 +41,68 @@ function [pathFoo] = buildExpressionGraph(outputFilename,...
 % --------------------------------------------------------------------------
 
 %% set paths
+if nargin < 5, buildRoot = []; end
+oldDir = pwd;
+restoreDir = onCleanup(@() cd(oldDir));
 [pathUtilities,~,~] = fileparts(mfilename('fullpath'));
 [pathMain,~,~] = fileparts(pathUtilities);
 pathBuildExpressionGraph = fullfile(pathMain, 'buildExpressionGraph');
-pathBuild = fullfile(pathMain, 'buildExpressionGraph', outputFilename);
-mkdir(pathBuild);
-
-OpenSimAD_DIR = fullfile(pathMain, 'OpenSimAD-install');
-SDK_DIR = fullfile(OpenSimAD_DIR, 'sdk');
-BIN_DIR = fullfile(OpenSimAD_DIR, 'bin');
-
-path_bin_foo = fullfile(BIN_DIR, 'foo.py');
+pathBuild = createBuildWorkspace(buildRoot, 'buildExpressionGraph');
 pathFoo = pathBuild;
-
-%% use cmake to compile .cpp to .exe
-cd(pathBuild);
-cmd1 = ['cmake "', pathBuildExpressionGraph, '" -G "', compiler, '" -DTARGET_NAME:STRING="',...
-    outputFilename, '" -DSDK_DIR:PATH="', SDK_DIR, '" -DCPP_DIR:PATH="', outputDir, '"'];
-if verbose_mode
-    system(cmd1);
-else
-    [~,~] = system(cmd1);
-end
-cmd2 = 'cmake --build . --config RelWithDebInfo';
-if verbose_mode
-    system(cmd2);
-else
-    [~,~] = system(cmd2);
-end
-
-%% run .exe to generate foo.py
-% Since it is hardcoded that the generated file is
-% ./opensimAD-install/bin/foo.py, this can cause problems when running
-% multiple opensimAD instances in parallel. To prevent this, we use a file
-% (lockFile.txt) to indicate when opensimAD is generating foo.py.
-lockFile = fullfile(BIN_DIR,'lockFile.txt');
-isLocked = isfile(lockFile);
-t0 = tic;
-
-while isLocked
-    isLocked = isfile(lockFile);
-    pause(10)
-
-    if toc(t0) > 300
-        error(['opensimAD timed out. Another instance of opensimAD took too ',...
-            'long to generate foo.py, or failed to delete its lockFile when done.'])
-    end
-end
-
-fid = fopen(lockFile,'w');
-fprintf(fid, ['Generating foo.py for ' outputFilename '.']);
-fprintf(fid, 'This file will be deleted after foo.py is generated and copied to its target folder.');
-fprintf(fid, ['Start: ' datestr(datetime,0)]);
-fclose(fid);
-
 try
-    cd(BIN_DIR);
-    path_EXE = fullfile(pathBuild, 'RelWithDebInfo', [outputFilename '.exe']);
-    system(['"' path_EXE '"']);
-    
-    copyfile(path_bin_foo, pathFoo);
-    delete(path_bin_foo);
+    copyfile(fullfile(outputDir, [outputFilename '.cpp']), fullfile(pathBuild, 'graph.cpp'));
+    copyfile(fullfile(pathBuildExpressionGraph, 'CMakeLists.txt'), pathBuild);
+    SDK_DIR = fullfile(pathMain, 'OpenSimAD-install', 'sdk');
+    BIN_DIR = fullfile(pathMain, 'OpenSimAD-install', 'bin');
+    cd(pathBuild);
+    command = ['cmake . -G "' compiler '" -DSDK_DIR:PATH="' SDK_DIR '"'];
+    runBuildCommand(command, 'Expression graph configuration', verbose_mode);
+    runBuildCommand('cmake --build . --config RelWithDebInfo', ...
+        'Expression graph compilation', verbose_mode);
+    pathEXE = fullfile(pathBuild, 'RelWithDebInfo', 'osimad_graph.exe');
+    requireBuildFile(pathEXE, 'Expression graph compilation');
 
-catch ME
-    % clean-up
-    if isfile(path_bin_foo)
-        delete(path_bin_foo)
+    % The recorder writes foo.py in the SDK bin directory. Preserve the
+    % existing serialization; only release the lock acquired by this call.
+    lockFile = fullfile(BIN_DIR, 'lockFile.txt');
+    pathBinFoo = fullfile(BIN_DIR, 'foo.py');
+    t0 = tic;
+    while isfile(lockFile)
+        if toc(t0) > 300
+            error('opensimAD:LockTimeout', ...
+                ['opensimAD timed out. Another instance of opensimAD took too ', ...
+                'long to generate foo.py, or failed to delete its lockFile when done.\n', ...
+                'Lock file: %s'], lockFile);
+        end
+        pause(1);
     end
-    delete(lockFile)
-
-    % error
-    rethrow(ME)
+    fid = fopen(lockFile, 'w');
+    if fid < 0
+        error('opensimAD:LockFile', 'Cannot create lock file: %s', lockFile);
+    end
+    fprintf(fid, 'Generating foo.py for %s.', outputFilename);
+    fclose(fid);
+    releaseLock = onCleanup(@() cleanupRecorder(pathBinFoo, lockFile));
+    if isfile(pathBinFoo)
+        delete(pathBinFoo); % Do not mistake a stale graph for new output.
+    end
+    cd(BIN_DIR);
+    runBuildCommand(['"' pathEXE '"'], 'Expression graph execution', verbose_mode);
+    requireBuildFile(pathBinFoo, 'Expression graph execution');
+    copyfile(pathBinFoo, pathFoo);
+    clear releaseLock;
+    cd(oldDir);
+catch ME
+    cd(oldDir);
+    rethrow(ME);
+end
 end
 
-delete(lockFile)
-
+function cleanupRecorder(pathFoo, lockFile)
+if isfile(pathFoo)
+    delete(pathFoo);
+end
+if isfile(lockFile)
+    delete(lockFile);
+end
 end

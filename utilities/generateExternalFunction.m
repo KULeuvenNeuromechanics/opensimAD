@@ -4,7 +4,7 @@ function [] = generateExternalFunction(pathOpenSimModel, outputDir,...
     export3DVelocities, export3DVelocitiesProjGround,...
     exportGRFs, exportGRMs, exportSeparateGRFs, exportContactPowers,...
     outputFilename, compiler, verboseMode, verify_ID,...
-    secondOrderDerivatives, noDll)
+    secondOrderDerivatives, noDll, buildRoot)
 % --------------------------------------------------------------------------
 % generateExternalFunction
 %   This function uses OpenSimAD to generate a CasADi external function. 
@@ -146,6 +146,10 @@ function [] = generateExternalFunction(pathOpenSimModel, outputDir,...
 %   - noDll -
 %   * if true, no .dll (or .lib) files are generated. [bool]
 %
+%   - buildRoot - (optional)
+%   * existing directory for intermediate builds [char]. Omitted or empty
+%   uses the buildExpressionGraph/buildExternalFunction folders in this repo.
+%
 % OUTPUT:
 %   This function does not return outputs, but generates files. Assuming 
 %   outputFilename = 'filename', the following files are saved in the folder 
@@ -195,6 +199,10 @@ function [] = generateExternalFunction(pathOpenSimModel, outputDir,...
 % Original date: 8/May/2023
 % --------------------------------------------------------------------------
 
+if nargin < 21, buildRoot = []; end
+oldDir = pwd;
+restoreDir = onCleanup(@() cd(oldDir));
+
 %% Write the cpp file.
 writeCppFile(pathOpenSimModel, outputDir, outputFilename,...
     jointsOrder, coordinatesOrder, input3DBodyForces, input3DBodyMoments,...
@@ -203,7 +211,7 @@ writeCppFile(pathOpenSimModel, outputDir, outputFilename,...
     exportGRFs, exportGRMs, exportSeparateGRFs, exportContactPowers);
 
 %% Build expression graph (foo.py)
-[fooPath] = buildExpressionGraph(outputFilename, outputDir, compiler, verboseMode);
+[fooPath] = buildExpressionGraph(outputFilename, outputDir, compiler, verboseMode, buildRoot);
 
 %% Generate code with expression graph and derivative information (foo_jac.c)
 load(fullfile(outputDir, [outputFilename, '_IO.mat']),'IO');
@@ -216,7 +224,7 @@ end
 
 %% Build external Function (.dll file).
 if ~noDll
-    buildExternalFunction(fooPath, outputFilename, outputDir, compiler, verboseMode);
+    buildExternalFunction(fooPath, outputFilename, outputDir, compiler, verboseMode, buildRoot);
 end
 
 %% Verification
@@ -227,6 +235,7 @@ if verify_ID
 end
 
 %% Clean-up
-removeAllTempFiles(outputFilename);
+cd(oldDir);
+cleanupBuildWorkspace(fooPath, oldDir); % Remove only after success.
 
 end

@@ -32,34 +32,13 @@ function [] = generateF(nInputs, fooPath, secondOrderDerivatives)
 % Last edit date: 
 % --------------------------------------------------------------------------
 
-% import casadi.*
-% cg = CodeGenerator('foo_jac');
-% arg = SX.sym('arg', dim);
-% [y, ~, ~] = foo(arg);
-% F = Function('F', {arg}, {y});
-% cg.add(F);
-% cg.add(F.jacobian());
-% % % Generate also forward, reverse, and forward-over-reverse to use a exact Hessian
-% % Fr = F.reverse(1);
-% % cg.add(Fr);
-% % for i=0:6
-% %     cg.add(F.forward(2^i));
-% %     cg.add(Fr.forward(2^i));
-% % end
-% cg.generate();
-
-
-% Evaluating foo.py with SX symbolics does not work from matlab. Need to
-% change recorder to create foo.m instead. For now, we use the compiled
-% version of genF.py.
-
+% The bundled executable handles Python/CasADi without a MATLAB Python setup.
+oldDir = pwd;
+restoreDir = onCleanup(@() cd(oldDir));
 [pathUtilities,~,~] = fileparts(mfilename('fullpath'));
-cd(fullfile(pathUtilities,'GenF'))
-
+cd(fullfile(pathUtilities, 'GenF'));
 command = ['GenF.exe "' fooPath '" ' num2str(nInputs) ' ' num2str(secondOrderDerivatives)];
-system(command);
-
-cd ..
-
-
+runBuildCommand(command, 'CasADi code generation', true);
+requireBuildFile(fullfile(fooPath, 'foo_jac.c'), 'CasADi code generation');
+requireBuildFile(fullfile(fooPath, 'F_foo.casadi'), 'CasADi code generation');
 end

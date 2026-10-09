@@ -50,10 +50,10 @@ outputDir = fullfile(pathMain, 'examples');
 outputFilename = 'F_test';
 
 % Compiler
-compiler = 'Visual Studio 17 2022';
+compiler = 'Visual Studio 16 2019';
 
 % Print information to the command window
-verbose_mode = false;
+verbose_mode = true;
 
 % Verify the generated function
 verify_ID = true;
@@ -135,7 +135,13 @@ secondOrderDerivatives = false;
 % Do not create an external function (.dll and .lib)
 % If you only want to use the serialised function (.casadi), this option cn
 % save some time.
-noDll = false;
+noDll = true;
+
+% optional temporary build directory as input argument
+% ( you  might run into character length problem when your build path has
+% too many characters ("e.g.
+% C:\folder1\folder2\folderwithveryveryverylongname3")
+build_directory = 'C:\temp';
 
 %% Call generateExternalFunction function
 generateExternalFunction(pathOpenSimModel, outputDir, jointsOrder,...
@@ -143,4 +149,4 @@ generateExternalFunction(pathOpenSimModel, outputDir, jointsOrder,...
     export3DPositions, export3DOrientations,...
     export3DVelocities, export3DVelocitiesProjGround, exportGRFs,...
     exportGRMs, exportSeparateGRFs, exportContactPowers, outputFilename, compiler,...
-    verbose_mode, verify_ID, secondOrderDerivatives, noDll);
+    verbose_mode, verify_ID, secondOrderDerivatives, noDll, build_directory);

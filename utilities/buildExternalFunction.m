@@ -1,4 +1,4 @@
-function [] = buildExternalFunction(fooPath, outputFilename, outputDir, compiler, verbose_mode)
+function [] = buildExternalFunction(fooPath, outputFilename, outputDir, compiler, verbose_mode, buildRoot)
 % --------------------------------------------------------------------------
 % buildExternalFunction
 %   Compiles the expression graph (foo_jac.c) into an external function (.dll)
@@ -40,39 +40,38 @@ function [] = buildExternalFunction(fooPath, outputFilename, outputDir, compiler
 % Original date: 8/May/2023
 % --------------------------------------------------------------------------
 
-%% set paths
+%% Build in a separate short workspace, also when called directly.
+% build directory as optional input argument
+if nargin < 6
+    buildRoot = [];
+end
+% path information
+oldDir = pwd;
+restoreDir = onCleanup(@() cd(oldDir));
 [pathUtilities,~,~] = fileparts(mfilename('fullpath'));
 [pathMain,~,~] = fileparts(pathUtilities);
-path_expression_graph_filename_build = fullfile(pathMain, 'buildExpressionGraph', outputFilename);
-path_external_functions_filename_install = fullfile(pathMain, 'installExternalFunction', outputFilename);
-mkdir(path_external_functions_filename_install);
-path_external_functions_build = fullfile(pathMain, 'buildExternalFunction');
-path_external_functions_filename_build = fullfile(pathMain, 'buildExternalFunction', outputFilename);
-mkdir(path_external_functions_filename_build);
-
-%% use cmake to compile foo_jac.c to .dll
-copyfile(fullfile(path_external_functions_build,'CMakeLists.txt'),path_external_functions_filename_build)
-copyfile(fullfile(fooPath,'foo_jac.c'),path_external_functions_filename_build)
-cd(path_external_functions_filename_build);
-
-cmd1 = ['cmake "', path_external_functions_filename_build, '" -G "', compiler, '" -DTARGET_NAME:STRING="',...
-    outputFilename, '" -DINSTALL_DIR:PATH="', path_external_functions_filename_install, '"'];
-if verbose_mode
-    system(cmd1);
-else
-    [~,~] = system(cmd1);
-end
-cmd2 = 'cmake --build . --config RelWithDebInfo --target install';
-if verbose_mode
-    system(cmd2);
-else
-    [~,~] = system(cmd2);
-end
-cd(pathMain);
-
-%% copy generated files to output directory
-copyfile(fullfile(path_external_functions_filename_install, 'bin', [outputFilename '.dll']), outputDir);
-copyfile(fullfile(path_external_functions_filename_install, 'lib', [outputFilename '.lib']), outputDir);
-
-
+pathBuild = createBuildWorkspace(buildRoot, 'buildExternalFunction');
+pathInstall = fullfile(pathBuild, 'install');
+% copy files to build location
+copyfile(fullfile(pathMain, 'buildExternalFunction', 'CMakeLists.txt'), pathBuild);
+copyfile(fullfile(fooPath, 'foo_jac.c'), pathBuild);
+cd(pathBuild);
+% Keep the public DLL name in the import library, but use a short logical
+% target name for Visual Studio intermediate files.
+command = ['cmake . -G "' compiler '" -DOUTPUT_NAME:STRING="' ...
+    outputFilename '" -DINSTALL_DIR:PATH="' pathInstall '"'];
+runBuildCommand(command, 'External function configuration', verbose_mode);
+runBuildCommand('cmake --build . --config RelWithDebInfo --target install', ...
+    'External function compilation and installation', verbose_mode);
+pathDll = fullfile(pathInstall, 'bin', [outputFilename '.dll']);
+pathLib = fullfile(pathInstall, 'lib', [outputFilename '.lib']);
+% error messages when build files were not generated
+requireBuildFile(pathDll, 'External function compilation');
+requireBuildFile(pathLib, 'External function compilation');
+% copy files to desired directory
+cd(oldDir);
+copyfile(pathDll, outputDir);
+copyfile(pathLib, outputDir);
+% clean up build dir (only after success)
+cleanupBuildWorkspace(pathBuild, oldDir);
 end
